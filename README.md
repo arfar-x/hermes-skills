@@ -1,4 +1,4 @@
-# skills
+# Agent skills
 
 A personal collection of AI-agent skills -- a portable developer/work
 toolset, not a single-purpose repo. It currently holds a Jira toolset;
@@ -45,6 +45,23 @@ See `skills/jira/README.md` for that toolset's architecture,
 configuration, and test suite -- future toolsets should have their own
 equivalent README under `skills/<toolset>/`.
 
+## Tools
+
+One row per thin skill, across all toolsets. Keep this in sync when
+adding or removing a `skills/<toolset>-<action>/` directory -- it's the
+single place to see everything installable at a glance.
+
+| Skill | Toolset | Type | Description |
+|---|---|---|---|
+| `jira` | [jira](skills/jira) | Read + Write | Do-everything Jira assistant (all actions below, one skill) |
+| `jira-my-work` | [jira](skills/jira) | Read | Unresolved issues assigned to the current user |
+| `jira-issues` | [jira](skills/jira) | Read | Arbitrary JQL search |
+| `jira-issue-summary` | [jira](skills/jira) | Read | Full context for one issue (fields, comments, worklogs, changelog, links) |
+| `jira-blockers` | [jira](skills/jira) | Read | Blocking status + reasons for one issue |
+| `jira-sprint` | [jira](skills/jira) | Read | Active sprint, board, dates, goal |
+| `jira-worklog` | [jira](skills/jira) | Write (gated) | Log time against an issue |
+| `jira-transition` | [jira](skills/jira) | Write (gated) | Move an issue to a new status |
+
 ## Installation
 
 1. Clone this repo somewhere permanent -- skills run straight out of the
@@ -78,7 +95,7 @@ equivalent README under `skills/<toolset>/`.
       - /path/to/your/local/checkout/of/skills/skills
   ```
 
-  or `hermes skills install <owner>/<repo>/<path-to-one-skill>` to fetch
+  or `hermes skills install arfar-x/agent-skills/skills/<path-to-one-skill>` to fetch
   a single skill by path. There is no bulk/sub-package install -- one
   `SKILL.md` per install call, so `external_dirs` is the practical
   option for a growing personal collection like this one.
@@ -184,6 +201,7 @@ follow the same pattern the Jira toolset already uses:
    toolset -- credentials only from env vars, no hardcoded local paths,
    write/mutating actions confirmation-gated in code (not just
    prompted).
+5. Add one row per new thin skill to the "Tools" table above.
 
 No registration step is needed beyond adding the files -- Hermes
 discovers new skills the next time it scans `external_dirs`, and Claude
