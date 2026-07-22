@@ -24,7 +24,7 @@ required_environment_variables:
 
 # Jira: Blockers
 
-Read-only. Run from this skill's directory via `terminal`:
+Read-only. Run from this skill's directory:
 
 ```bash
 python3 ../jira/scripts/jira_tool.py blockers --issue_key PAY-123

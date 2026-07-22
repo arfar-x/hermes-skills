@@ -24,7 +24,7 @@ required_environment_variables:
 
 # Jira: Issue Summary
 
-Read-only. Run from this skill's directory via `terminal`:
+Read-only. Run from this skill's directory:
 
 ```bash
 python3 ../jira/scripts/jira_tool.py issue_summary --issue_key PAY-123

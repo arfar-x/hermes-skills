@@ -43,7 +43,7 @@ Jira REST client (`lib/jira_client.py`). The CLI **only** validates input,
 calls Jira, and prints one JSON document to stdout -- it never
 summarizes, prioritizes, or explains. **All reasoning is your job.**
 
-Run it with `terminal` from this skill's directory:
+Run it from this skill's directory:
 
 ```
 python3 scripts/jira_tool.py <tool> [--flags...]

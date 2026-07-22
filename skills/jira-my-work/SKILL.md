@@ -24,7 +24,7 @@ required_environment_variables:
 
 # Jira: My Work
 
-Read-only. Run from this skill's directory via `terminal`:
+Read-only. Run from this skill's directory:
 
 ```bash
 python3 ../jira/scripts/jira_tool.py my_work [--order_by "priority DESC, updated DESC"] [--max_results 100]

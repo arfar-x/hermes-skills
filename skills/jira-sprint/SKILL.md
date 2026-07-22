@@ -23,7 +23,7 @@ required_environment_variables:
 
 # Jira: Sprint
 
-Read-only. Run from this skill's directory via `terminal`:
+Read-only. Run from this skill's directory:
 
 ```bash
 python3 ../jira/scripts/jira_tool.py sprint [--board_id 42]

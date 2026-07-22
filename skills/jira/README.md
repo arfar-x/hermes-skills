@@ -1,9 +1,12 @@
-# Jira Assistant (Hermes Skill)
+# Jira Assistant
 
-A production-ready Hermes skill that lets an LLM act as a high-level Jira
+A production-ready agent skill that lets an LLM act as a high-level Jira
 assistant -- answering questions like "what should I work on next?" or
 "what's blocking PAY-123?" -- without ever exposing raw Jira REST APIs to
-the model.
+the model. Runtime-specific details (Hermes, Claude Code, claude.ai) are
+confined to `SKILL.md`'s `metadata.hermes` block and the "Installing
+into Hermes" section below -- the skill body and CLI itself don't
+assume any particular agent runtime.
 
 ## Design
 
@@ -28,7 +31,7 @@ the model.
 
 ```
 skills/jira/
-├── SKILL.md                # Hermes manifest: frontmatter + agent instructions
+├── SKILL.md                # Skill manifest: frontmatter + agent instructions
 ├── scripts/
 │   └── jira_tool.py         # CLI dispatcher the agent runs via `terminal`
 ├── prompts/                 # Source material SKILL.md was authored from
@@ -130,14 +133,14 @@ edits.
    ```yaml
    skills:
      external_dirs:
-       - /path/to/your/local/checkout/of/hermes-jira/skills
+       - /path/to/your/local/checkout/of/skills/skills
    ```
 
 2. Install dependencies (into whatever Python environment Hermes' sandbox
    uses to run `terminal`/`execute_code`):
 
    ```bash
-   pip install -r /path/to/your/local/checkout/of/hermes-jira/skills/jira/requirements.txt
+   pip install -r /path/to/your/local/checkout/of/skills/skills/jira/requirements.txt
    ```
 
 3. Set the environment variables from the table above wherever Hermes'

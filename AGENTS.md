@@ -56,6 +56,16 @@ These apply repo-wide, to every toolset, not just Jira:
   list to decide which vars are allowed to pass through to the sandboxed
   `terminal` tool that runs the CLI. An unlisted var will be silently
   stripped at runtime, not just undocumented.
+- **Agent/runtime-specific details belong in `SKILL.md`'s frontmatter
+  (`metadata.hermes.*`, `required_environment_variables`), never in the
+  skill's body prose, `prompts/`, or the tool-invocation instructions
+  themselves.** E.g. don't write "run this via `terminal`" in a
+  `SKILL.md` body -- that's Hermes' tool name, and the same instruction
+  text is read by Claude Code and claude.ai too. Say "run this from the
+  skill's directory" instead, and declare `requires_toolsets: [terminal]`
+  in frontmatter for Hermes to key off of. This keeps one `SKILL.md` per
+  action usable, unmodified, across every runtime -- only the manifest
+  varies by consumer, not the instructions.
 
 Toolset-specific conventions (e.g. "Jira auth is Basic-only, don't
 reintroduce PAT without being asked") belong in that toolset's own

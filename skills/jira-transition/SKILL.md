@@ -27,7 +27,7 @@ required_environment_variables:
 
 # Jira: Transition
 
-**Write, gated.** Run from this skill's directory via `terminal`:
+**Write, gated.** Run from this skill's directory:
 
 ```bash
 python3 ../jira/scripts/jira_tool.py transition --issue_key PAY-123 --status Review --confirm

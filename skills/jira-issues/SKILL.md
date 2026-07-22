@@ -25,7 +25,7 @@ required_environment_variables:
 
 # Jira: Issue Search
 
-Read-only. Run from this skill's directory via `terminal`:
+Read-only. Run from this skill's directory:
 
 ```bash
 python3 ../jira/scripts/jira_tool.py search --jql "assignee = currentUser() AND updated <= -14d" [--max_results 100]
