@@ -26,7 +26,7 @@ skills/
 ├── jira-blockers/         # Thin skill: blocking status for one issue
 ├── jira-sprint/           # Thin skill: active sprint/board/goal
 ├── jira-worklog/          # Thin skill: log time (write, confirm-gated)
-├── jira-transition/       # Thin skill: move an issue's status (write, confirm-gated)
+├── jira-status/           # Thin skill: move an issue's status (write, confirm-gated)
 ├── jira-worklog-report/   # Thin skill: logged time vs. estimate over a date range
 ├── jira-list-fields/      # Thin skill: enumerate fields to discover a custom field's id
 ├── jira-worklog-edit/     # Thin skill: fix a worklog's duration/description/date (write, confirm-gated)
@@ -65,7 +65,7 @@ single place to see everything installable at a glance.
 | `jira-blockers` | [jira](skills/jira) | Read | Blocking status + reasons for one issue |
 | `jira-sprint` | [jira](skills/jira) | Read | Active sprint, board, dates, goal |
 | `jira-worklog` | [jira](skills/jira) | Write (gated) | Log time against an issue, optionally backdated |
-| `jira-transition` | [jira](skills/jira) | Write (gated) | Move an issue to a new status |
+| `jira-status` | [jira](skills/jira) | Write (gated) | Move an issue to a new status |
 | `jira-worklog-report` | [jira](skills/jira) | Read | Logged time vs. estimate over a date range, per issue and total |
 | `jira-list-fields` | [jira](skills/jira) | Read | Enumerate every field (incl. custom fields) to discover a custom field's id by name |
 | `jira-worklog-edit` | [jira](skills/jira) | Write (gated) | Update an existing worklog's duration/description/date |

@@ -90,7 +90,13 @@ def test_get_issue_builds_description_subtasks_components_and_custom_fields(clie
     assert issue.description == "Needs a frontend fix."
     assert issue.components == ["Frontend", "API"]
     assert issue.subtasks == [
-        {"key": "PAY-2", "summary": "Sub-task", "status": "To Do", "issue_type": "Sub-task"}
+        {
+            "key": "PAY-2",
+            "url": "https://jira.example.com/browse/PAY-2",
+            "summary": "Sub-task",
+            "status": "To Do",
+            "issue_type": "Sub-task",
+        }
     ]
     assert issue.custom_fields == {"customfield_10056": "https://figma.com/file/abc"}
 
@@ -240,6 +246,7 @@ def test_transition_issue_resolves_by_target_status_name(client, mock_session):
 
     assert result == {
         "issue_key": "PAY-1",
+        "url": "https://jira.example.com/browse/PAY-1",
         "transitioned_to": "Review",
         "transition_name": "Move to Review",
         "success": True,

@@ -363,8 +363,12 @@ class JiraClient:
     # Model builders (translate raw Jira JSON -> typed models)
     # ------------------------------------------------------------------
 
-    @staticmethod
-    def _build_issue_links(raw_links: List[Dict[str, Any]]) -> List[IssueLink]:
+    def _browse_url(self, issue_key: str) -> Optional[str]:
+        if not issue_key:
+            return None
+        return f"{self.config.base_url}/browse/{issue_key}"
+
+    def _build_issue_links(self, raw_links: List[Dict[str, Any]]) -> List[IssueLink]:
         links: List[IssueLink] = []
         for raw_link in raw_links or []:
             link_type = safe_get(raw_link, "type", "name", default="Related")
@@ -378,22 +382,24 @@ class JiraClient:
                 type_label = safe_get(raw_link, "type", "inward", default=link_type)
             else:
                 continue
+            related_key = related.get("key", "")
             links.append(
                 IssueLink(
                     link_type=type_label,
                     direction=direction,
-                    related_key=related.get("key", ""),
+                    related_key=related_key,
                     related_summary=safe_get(related, "fields", "summary"),
                     related_status=safe_get(related, "fields", "status", "name"),
+                    related_url=self._browse_url(related_key),
                 )
             )
         return links
 
-    @staticmethod
-    def _build_subtasks(raw_subtasks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def _build_subtasks(self, raw_subtasks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         return [
             {
                 "key": raw.get("key", ""),
+                "url": self._browse_url(raw.get("key", "")),
                 "summary": safe_get(raw, "fields", "summary"),
                 "status": safe_get(raw, "fields", "status", "name"),
                 "issue_type": safe_get(raw, "fields", "issuetype", "name"),
@@ -401,8 +407,7 @@ class JiraClient:
             for raw in raw_subtasks or []
         ]
 
-    @classmethod
-    def _build_issue(cls, raw: Dict[str, Any]) -> Issue:
+    def _build_issue(self, raw: Dict[str, Any]) -> Issue:
         fields = raw.get("fields", {}) or {}
         description = fields.get("description")
         custom_fields = {
@@ -410,8 +415,10 @@ class JiraClient:
             for key, value in fields.items()
             if key not in _NAMED_ISSUE_FIELDS and value is not None
         }
+        key = raw.get("key", "")
         return Issue(
-            key=raw.get("key", ""),
+            key=key,
+            url=self._browse_url(key),
             summary=fields.get("summary", "") or "",
             status=safe_get(fields, "status", "name", default="Unknown"),
             priority=safe_get(fields, "priority", "name"),
@@ -422,14 +429,14 @@ class JiraClient:
             created=fields.get("created"),
             due_date=fields.get("duedate"),
             labels=list(fields.get("labels") or []),
-            links=cls._build_issue_links(fields.get("issuelinks", [])),
+            links=self._build_issue_links(fields.get("issuelinks", [])),
             raw=raw,
             original_estimate_seconds=fields.get("timeoriginalestimate"),
             time_spent_seconds=fields.get("timespent"),
             remaining_estimate_seconds=fields.get("timeestimate"),
             description=adf_to_plain_text(description) if description else None,
             components=[c.get("name") for c in fields.get("components") or [] if c.get("name")],
-            subtasks=cls._build_subtasks(fields.get("subtasks")),
+            subtasks=self._build_subtasks(fields.get("subtasks")),
             custom_fields=custom_fields,
         )
 
@@ -691,6 +698,7 @@ class JiraClient:
         )
         return {
             "issue_key": issue_key,
+            "url": self._browse_url(issue_key),
             "transitioned_to": resolved.to_status,
             "transition_name": resolved.name,
             "success": True,
@@ -820,10 +828,10 @@ class JiraClient:
             max_results: Safety cap on parent issues scanned.
 
         Returns:
-            ``{"project": ..., "issue_count": N, "stories": [{"key",
+            ``{"project": ..., "issue_count": N, "stories": [{"key", "url",
                "summary", "status", "description", "components",
                "has_frontend_subtask", "has_backend_subtask", "needs_triage",
-               "subtasks": [{"key", "summary", "status", "labels"}, ...]},
+               "subtasks": [{"key", "url", "summary", "status", "labels"}, ...]},
                ...]}``
         """
         resolved_project = (project or self.config.default_project or "").strip()
@@ -854,6 +862,7 @@ class JiraClient:
             subtasks_by_parent.setdefault(parent_key, []).append(
                 {
                     "key": sub.key,
+                    "url": sub.url,
                     "summary": sub.summary,
                     "status": sub.status,
                     "labels": list(sub.labels),
@@ -867,6 +876,7 @@ class JiraClient:
             stories.append(
                 {
                     "key": parent.key,
+                    "url": parent.url,
                     "summary": parent.summary,
                     "status": parent.status,
                     "description": parent.description,

@@ -34,6 +34,7 @@ class IssueLink:
     related_key: str
     related_summary: Optional[str]
     related_status: Optional[str]
+    related_url: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -42,6 +43,7 @@ class IssueLink:
             "related_key": self.related_key,
             "related_summary": self.related_summary,
             "related_status": self.related_status,
+            "related_url": self.related_url,
         }
 
 
@@ -135,10 +137,12 @@ class Issue:
     components: List[str] = field(default_factory=list)
     subtasks: List[Dict[str, Any]] = field(default_factory=list)
     custom_fields: Dict[str, Any] = field(default_factory=dict)
+    url: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return {
             "key": self.key,
+            "url": self.url,
             "summary": self.summary,
             "status": self.status,
             "priority": self.priority,

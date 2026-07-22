@@ -46,6 +46,7 @@ def blockers(issue_key: str) -> Dict[str, Any]:
         reasons = blocking_reasons(issue) + _comment_reasons(key, comments)
         return {
             "issue_key": issue.key,
+            "url": issue.url,
             "blocked": len(reasons) > 0,
             "reasons": reasons,
         }

@@ -70,6 +70,7 @@ def _issue_entry(issue: Issue, matched: List[Worklog]) -> Dict[str, Any]:
     logged_seconds = sum(wl.time_spent_seconds for wl in matched)
     return {
         "key": issue.key,
+        "url": issue.url,
         "summary": issue.summary,
         "status": issue.status,
         "original_estimate_seconds": estimate,

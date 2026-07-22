@@ -30,8 +30,9 @@ def my_work(order_by: str = "priority DESC, updated DESC", max_results: int = 10
     Returns:
         A JSON list of issue summaries, e.g.::
 
-            [{"key": "PAY-123", "summary": "...", "priority": "High",
-              "status": "In Progress", "updated": "...", "blocked": false}]
+            [{"key": "PAY-123", "url": "https://jira.example.com/browse/PAY-123",
+              "summary": "...", "priority": "High", "status": "In Progress",
+              "updated": "...", "blocked": false}]
     """
 
     def _run() -> List[Dict[str, Any]]:
@@ -43,6 +44,7 @@ def my_work(order_by: str = "priority DESC, updated DESC", max_results: int = 10
         return [
             {
                 "key": issue.key,
+                "url": issue.url,
                 "summary": issue.summary,
                 "priority": issue.priority,
                 "status": issue.status,

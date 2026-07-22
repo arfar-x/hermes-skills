@@ -1,5 +1,5 @@
 ---
-name: jira-transition
+name: jira-status
 description: >-
   Moves a Jira issue to a new status. Use for "move PAY-123 to Review" or
   "close PAY-123". This is a write operation gated behind explicit user
@@ -25,7 +25,7 @@ required_environment_variables:
     required_for: optional, defaults to false (asks before every write)
 ---
 
-# Jira: Transition
+# Jira: Status
 
 **Write, gated.** Run from this skill's directory:
 

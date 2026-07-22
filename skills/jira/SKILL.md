@@ -94,6 +94,13 @@ python3 scripts/jira_tool.py <tool> [--flags...]
 7. **If a result contains `"error"`,** tell the user what went wrong in
    plain language (not found, permission denied, invalid JQL, etc.)
    instead of retrying silently or fabricating a result.
+8. **Link issue keys, don't just print them.** Every tool that returns an
+   issue (or a subtask, or a linked issue) includes a sibling `url` field
+   (e.g. `issue.url`, `subtasks[].url`, `links[].related_url`) -- when you
+   mention an issue key in prose, render it as a markdown link using that
+   `url`, e.g. `[PAY-123](https://jira.example.com/browse/PAY-123)`, instead
+   of a bare key. Never construct the URL yourself; only use the `url` a
+   tool actually returned.
 
 ## Commands
 
