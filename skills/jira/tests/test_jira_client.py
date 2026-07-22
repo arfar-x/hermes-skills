@@ -281,3 +281,80 @@ def test_list_fields_returns_id_name_custom(client, mock_session):
         {"id": "summary", "name": "Summary", "custom": False},
         {"id": "customfield_10056", "name": "Figma Link", "custom": True},
     ]
+
+
+def test_triage_requires_a_project(client):
+    with pytest.raises(JiraValidationError):
+        client.triage()
+
+
+def test_triage_uses_default_project_from_config(jira_config, mock_session):
+    from dataclasses import replace
+
+    from lib.jira_client import JiraClient
+
+    configured_client = JiraClient(config=replace(jira_config, default_project="PAYKAN"), session=mock_session)
+    mock_session.request.side_effect = [
+        make_response(json_data={"issues": []}),
+        make_response(json_data={"issues": []}),
+    ]
+    result = configured_client.triage()
+    assert result["project"] == "PAYKAN"
+
+
+def test_triage_groups_subtasks_by_parent_and_flags_labels(client, mock_session):
+    parents_page = make_response(
+        json_data={
+            "issues": [
+                {
+                    "key": "PAYKAN-100",
+                    "fields": {"summary": "Add checkout flow", "status": {"name": "To Do"}},
+                },
+                {
+                    "key": "PAYKAN-200",
+                    "fields": {"summary": "No subtasks yet", "status": {"name": "To Do"}},
+                },
+            ]
+        }
+    )
+    subtasks_page = make_response(
+        json_data={
+            "issues": [
+                {
+                    "key": "PAYKAN-101",
+                    "fields": {
+                        "summary": "Build checkout UI",
+                        "status": {"name": "To Do"},
+                        "labels": ["Frontend"],
+                        "parent": {"key": "PAYKAN-100"},
+                    },
+                },
+                {
+                    "key": "PAYKAN-102",
+                    "fields": {
+                        "summary": "Checkout API",
+                        "status": {"name": "Done"},
+                        "labels": ["Backend"],
+                        "parent": {"key": "PAYKAN-100"},
+                    },
+                },
+            ]
+        }
+    )
+    mock_session.request.side_effect = [parents_page, subtasks_page]
+
+    result = client.triage(project="PAYKAN")
+
+    assert result["project"] == "PAYKAN"
+    assert result["issue_count"] == 2
+    story_100 = next(s for s in result["stories"] if s["key"] == "PAYKAN-100")
+    assert story_100["has_frontend_subtask"] is True
+    assert story_100["has_backend_subtask"] is True
+    assert story_100["needs_triage"] is False
+    assert {s["key"] for s in story_100["subtasks"]} == {"PAYKAN-101", "PAYKAN-102"}
+
+    story_200 = next(s for s in result["stories"] if s["key"] == "PAYKAN-200")
+    assert story_200["needs_triage"] is True
+    assert story_200["subtasks"] == []
+    assert story_200["has_frontend_subtask"] is False
+    assert story_200["has_backend_subtask"] is False

@@ -26,6 +26,9 @@ required_environment_variables:
   - name: JIRA_AUTO_CONFIRM_WRITES
     prompt: "Skip the confirm step before logging work / transitioning tickets? (true/false)"
     required_for: optional, defaults to false (asks before every write)
+  - name: JIRA_DEFAULT_PROJECT
+    prompt: "Default Jira project key for triage (e.g. PAY), if you always triage the same project"
+    required_for: optional -- only used by triage; if unset, resolve/pass --project yourself
 ---
 
 # Jira Assistant
@@ -133,6 +136,11 @@ python3 scripts/jira_tool.py worklog_edit --issue_key PAY-123 --worklog_id 28459
 
 # Permanently delete a worklog entry (write, gated, irreversible -- see rule 5)
 python3 scripts/jira_tool.py worklog_delete --issue_key PAY-123 --worklog_id 28459 --confirm
+
+# Group unresolved stories/bugs/tasks with their labeled subtasks, for
+# frontend/backend/design-readiness triage -- --project falls back to
+# JIRA_DEFAULT_PROJECT if omitted
+python3 scripts/jira_tool.py triage [--project PAY] [--parent_issue_types Story,Bug,Task]
 ```
 
 ## Examples
@@ -213,22 +221,29 @@ or `search` call to see what statuses actually appear).
 **"Which task has no log that I should log?"**
 Run `search --jql "assignee = currentUser() AND resolution = Unresolved AND timespent is EMPTY"`.
 
-**"Based on the description, which tasks need backend or frontend?"**
-Run `search` (or `issue_summary` per issue) and read each issue's
-`description` and `components` yourself -- there's no separate
-classification tool, since "frontend"/"backend" isn't a fixed Jira
-field; it's inferred from this text.
+**"Which tasks don't have subtasks yet?" / "Which need backend vs frontend work?" / "Which stories need triage?"**
+Run `triage [--project PAY]` (falls back to `JIRA_DEFAULT_PROJECT` if you
+omit `--project`; resolve a project yourself first if neither is set --
+see `jira-triage`'s SKILL.md). For each returned story: if
+`has_frontend_subtask`/`has_backend_subtask` are already known (i.e.
+`needs_triage` is `false`), report them as fact. If `needs_triage` is
+`true` (no subtasks yet), infer frontend/backend/design needs from
+`description`, falling back to `summary` if there's no description --
+and if neither gives enough signal, tell the user this story doesn't have
+enough information to suggest subtasks rather than guessing. Always
+caveat an inferred verdict as inferred, never state it as fact the way
+`has_frontend_subtask`/`has_backend_subtask` are.
 
-**"Which tasks don't have subtasks?" / "Which have a frontend subtask?" / "Which have a frontend subtask with backend ready?"**
-Run `search` and reason over each issue's `subtasks` list (empty means
-no subtasks) and each subtask's `summary`/`issue_type` for
-frontend/backend hints, combined with the parent issue's own
-`status`/`components` for "is the backend ready" -- again, reasoning
-over already-returned structured data, not a new tool per phrasing.
+**"Based on the description, which tasks need backend or frontend?" (ad hoc, no subtask structure yet)**
+If the user just wants a one-off read of a few issues rather than a full
+triage sweep, `search` (or `issue_summary` per issue) and read
+`description`/`components` yourself is fine -- reach for `triage` instead
+when the question is really about the Frontend/Backend subtask workflow
+across many stories.
 
 ## Reference
 
 See `README.md` in this skill directory for architecture details, the
 full environment-variable table, and how to run the test suite
-(`pytest`, 95 tests covering the client, config validation, and every
+(`pytest`, 100 tests covering the client, config validation, and every
 tool's success/error/confirmation paths).

@@ -43,9 +43,14 @@ skills/jira/
 │   ├── issue_summary.py
 │   ├── blockers.py
 │   ├── worklog.py
+│   ├── worklog_edit.py
+│   ├── worklog_delete.py
 │   ├── transition.py
 │   ├── search.py
-│   └── sprint.py
+│   ├── sprint.py
+│   ├── worklog_report.py
+│   ├── list_fields.py
+│   └── triage.py
 ├── lib/                     # Shared implementation, not directly agent-facing
 │   ├── jira_client.py       # The single Jira REST client
 │   ├── auth.py              # Env-based configuration + validation
@@ -71,6 +76,7 @@ ever hard-coded.**
 | `JIRA_VERIFY_SSL` | No | `true` | Disable only for trusted self-signed internal instances |
 | `JIRA_AUTO_CONFIRM_WRITES` | No | `false` | Skip the confirmation gate for `worklog`/`transition` |
 | `JIRA_CACHE_TTL_SECONDS` | No | `0` | Optional TTL cache for idempotent GET requests; `0` disables caching |
+| `JIRA_DEFAULT_PROJECT` | No | -- | Project key (e.g. `PAYKAN`) used by `triage` when `--project` isn't given; if unset, the model must resolve/pass a project itself |
 
 Configuration is validated eagerly: `lib.auth.load_config()` raises a
 `ConfigurationError` with a specific, actionable message if required
@@ -97,6 +103,7 @@ Jira Server/Data Center.
 | `sprint(board_id)` | Read | Active sprint, board, dates, and goal |
 | `worklog_report(since, until, max_issues)` | Read | Aggregate your logged time over a date range vs. each issue's estimate |
 | `list_fields()` | Read | Enumerate every field (incl. custom fields) to discover a custom field's id by name |
+| `triage(project, parent_issue_types, max_results)` | Read | Group unresolved parent issues (Story/Bug/Task) with their labeled subtasks, for frontend/backend/design-readiness triage |
 
 Each tool is reachable both as a Python function (`tools/<name>.py`) and
 as a CLI subcommand (`scripts/jira_tool.py <name>`). See `skill.yaml` for

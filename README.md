@@ -30,7 +30,8 @@ skills/
 ├── jira-worklog-report/   # Thin skill: logged time vs. estimate over a date range
 ├── jira-list-fields/      # Thin skill: enumerate fields to discover a custom field's id
 ├── jira-worklog-edit/     # Thin skill: fix a worklog's duration/description/date (write, confirm-gated)
-└── jira-worklog-delete/   # Thin skill: permanently delete a worklog (write, confirm-gated)
+├── jira-worklog-delete/   # Thin skill: permanently delete a worklog (write, confirm-gated)
+└── jira-triage/           # Thin skill: group stories with their labeled subtasks for FE/BE/design triage
 ```
 
 A future toolset (say, `backoffice`) would land the same way:
@@ -69,6 +70,7 @@ single place to see everything installable at a glance.
 | `jira-list-fields` | [jira](skills/jira) | Read | Enumerate every field (incl. custom fields) to discover a custom field's id by name |
 | `jira-worklog-edit` | [jira](skills/jira) | Write (gated) | Update an existing worklog's duration/description/date |
 | `jira-worklog-delete` | [jira](skills/jira) | Write (gated) | Permanently delete a worklog entry |
+| `jira-triage` | [jira](skills/jira) | Read | Group unresolved stories/bugs/tasks with their labeled subtasks, for frontend/backend/design-readiness triage |
 
 ## Installation
 

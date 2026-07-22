@@ -34,6 +34,10 @@ class JiraConfig:
         auto_confirm_writes: When True, write operations (transition,
             worklog, comment) execute without requiring explicit
             confirmation from the caller.
+        default_project: Optional Jira project key (e.g. ``PAYKAN``) used
+            by tools that need a project scope (e.g. ``triage``) when the
+            caller doesn't pass one explicitly. If unset, callers must
+            resolve/pass a project themselves -- never guessed in code.
     """
 
     base_url: str
@@ -43,6 +47,7 @@ class JiraConfig:
     max_retries: int = 3
     verify_ssl: bool = True
     auto_confirm_writes: bool = False
+    default_project: Optional[str] = None
 
     def auth_summary(self) -> str:
         """Return a redacted, human-readable description of the auth mode."""
@@ -102,6 +107,7 @@ def load_config(env: Optional[Mapping[str, str]] = None) -> JiraConfig:
         JIRA_MAX_RETRIES (optional, default 3).
         JIRA_VERIFY_SSL (optional, default true).
         JIRA_AUTO_CONFIRM_WRITES (optional, default false).
+        JIRA_DEFAULT_PROJECT (optional, default unset).
     """
     source: Mapping[str, str] = env if env is not None else os.environ
 
@@ -137,6 +143,7 @@ def load_config(env: Optional[Mapping[str, str]] = None) -> JiraConfig:
         max_retries=_env_int(source, "JIRA_MAX_RETRIES", 3),
         verify_ssl=_env_bool(source, "JIRA_VERIFY_SSL", True),
         auto_confirm_writes=_env_bool(source, "JIRA_AUTO_CONFIRM_WRITES", False),
+        default_project=_env(source, "JIRA_DEFAULT_PROJECT"),
     )
     logger.info(
         "Loaded Jira configuration: base_url=%s auth=%s auto_confirm_writes=%s",

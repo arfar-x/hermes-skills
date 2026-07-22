@@ -10,6 +10,7 @@ from tools import (
     search,
     sprint,
     transition,
+    triage,
     worklog,
     worklog_delete,
     worklog_edit,
@@ -129,6 +130,27 @@ def test_list_fields_returns_client_result():
     with patch("tools.list_fields.get_client", return_value=mock_client):
         result = list_fields.list_fields()
     assert result == [{"id": "summary", "name": "Summary", "custom": False}]
+
+
+def test_triage_delegates_to_client_and_returns_result():
+    mock_client = MagicMock()
+    mock_client.triage.return_value = {"project": "PAYKAN", "issue_count": 0, "stories": []}
+    with patch("tools.triage.get_client", return_value=mock_client):
+        result = triage.triage(project="PAYKAN")
+    assert result["project"] == "PAYKAN"
+    mock_client.triage.assert_called_once_with(
+        project="PAYKAN", parent_issue_types=None, max_results=200
+    )
+
+
+def test_triage_wraps_errors_as_json():
+    mock_client = MagicMock()
+    from lib.jira_client import JiraValidationError
+
+    mock_client.triage.side_effect = JiraValidationError("no project")
+    with patch("tools.triage.get_client", return_value=mock_client):
+        result = triage.triage()
+    assert "error" in result
 
 
 def test_worklog_requires_confirmation_by_default():

@@ -790,6 +790,100 @@ class JiraClient:
         raw = self._request("GET", f"{self.API_V2}/myself", params={}, cache=True)
         return self._build_user(raw)
 
+    def triage(
+        self,
+        *,
+        project: Optional[str] = None,
+        parent_issue_types: Optional[List[str]] = None,
+        max_results: int = 200,
+    ) -> Dict[str, Any]:
+        """Group unresolved parent issues with their subtasks for FE/BE triage.
+
+        In this workflow, PMs create parent issues (Story/Bug/Task/Epic) and
+        developers/designers create+label subtasks (e.g. "Frontend",
+        "Backend") under them. A parent's own ``fields.subtasks`` only
+        contains a lightweight stub (no ``labels``), so this method fetches
+        subtasks as their own top-level search (which does carry ``labels``)
+        and groups them by parent key -- this is deterministic bookkeeping,
+        not judgment. Whether a parent *without* any subtasks needs
+        frontend/backend/design work is left entirely to the caller (the
+        LLM) to infer from ``description``/``summary``; this method only
+        flags that fact (``needs_triage: true``), it never guesses.
+
+        Args:
+            project: Jira project key to scope both searches to (e.g.
+                ``PAYKAN``). Falls back to ``JIRA_DEFAULT_PROJECT`` if unset.
+                Raises if neither is available -- never guessed.
+            parent_issue_types: Issue types treated as "parent" work items.
+                Defaults to ``["Story", "Bug", "Task"]`` (excludes Epic and
+                Sub-task).
+            max_results: Safety cap on parent issues scanned.
+
+        Returns:
+            ``{"project": ..., "issue_count": N, "stories": [{"key",
+               "summary", "status", "description", "components",
+               "has_frontend_subtask", "has_backend_subtask", "needs_triage",
+               "subtasks": [{"key", "summary", "status", "labels"}, ...]},
+               ...]}``
+        """
+        resolved_project = (project or self.config.default_project or "").strip()
+        if not resolved_project:
+            raise JiraValidationError(
+                "No project given and JIRA_DEFAULT_PROJECT is not set. Pass an explicit "
+                "project key, e.g. determined from prior search results or by asking the user."
+            )
+        types = list(parent_issue_types or ["Story", "Bug", "Task"])
+        types_jql = ", ".join(types)
+
+        parents = self.search(
+            f"project = {resolved_project} AND issuetype in ({types_jql}) AND resolution = Unresolved",
+            fields=["summary", "status", "description", "components"],
+            max_results=max_results,
+        )
+        subtask_issues = self.search(
+            f"project = {resolved_project} AND issuetype = Sub-task AND resolution = Unresolved",
+            fields=["summary", "status", "labels", "parent"],
+            max_results=max_results,
+        )
+
+        subtasks_by_parent: Dict[str, List[Dict[str, Any]]] = {}
+        for sub in subtask_issues:
+            parent_key = safe_get(sub.custom_fields, "parent", "key")
+            if not parent_key:
+                continue
+            subtasks_by_parent.setdefault(parent_key, []).append(
+                {
+                    "key": sub.key,
+                    "summary": sub.summary,
+                    "status": sub.status,
+                    "labels": list(sub.labels),
+                }
+            )
+
+        stories: List[Dict[str, Any]] = []
+        for parent in parents:
+            subs = subtasks_by_parent.get(parent.key, [])
+            labels_lower = [label.lower() for sub in subs for label in sub["labels"]]
+            stories.append(
+                {
+                    "key": parent.key,
+                    "summary": parent.summary,
+                    "status": parent.status,
+                    "description": parent.description,
+                    "components": list(parent.components),
+                    "has_frontend_subtask": any("frontend" in label for label in labels_lower),
+                    "has_backend_subtask": any("backend" in label for label in labels_lower),
+                    "needs_triage": len(subs) == 0,
+                    "subtasks": subs,
+                }
+            )
+
+        return {
+            "project": resolved_project,
+            "issue_count": len(stories),
+            "stories": stories,
+        }
+
     def list_fields(self) -> List[Dict[str, Any]]:
         """Return every field this Jira instance knows about.
 

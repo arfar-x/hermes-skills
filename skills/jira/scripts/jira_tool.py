@@ -21,6 +21,7 @@ Usage:
     python scripts/jira_tool.py worklog_edit --issue_key PAY-123 --worklog_id 28459 \\
         [--duration 2h] [--description "..."] [--date 2026-07-20] [--confirm]
     python scripts/jira_tool.py worklog_delete --issue_key PAY-123 --worklog_id 28459 [--confirm]
+    python scripts/jira_tool.py triage [--project PAYKAN] [--parent_issue_types Story,Bug,Task]
 
 Every subcommand prints JSON only (never prose) and always exits 0 on a
 handled error -- failures are reported as {"error": {...}} in the JSON
@@ -47,6 +48,7 @@ from tools import (  # noqa: E402
     search,
     sprint,
     transition,
+    triage,
     worklog,
     worklog_delete,
     worklog_edit,
@@ -126,6 +128,21 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--worklog_id", required=True, help="Worklog entry id, e.g. from issue_summary's worklogs[].id")
     p.add_argument("--confirm", action="store_true", help="Only pass after the user has explicitly confirmed")
 
+    p = subparsers.add_parser(
+        "triage", help="Group unresolved parent issues with their labeled subtasks"
+    )
+    p.add_argument(
+        "--project",
+        default=None,
+        help="Jira project key, e.g. PAYKAN. Falls back to JIRA_DEFAULT_PROJECT if omitted.",
+    )
+    p.add_argument(
+        "--parent_issue_types",
+        default=None,
+        help='Comma-separated parent issue types. Default: "Story,Bug,Task"',
+    )
+    p.add_argument("--max_results", type=int, default=200)
+
     return parser
 
 
@@ -162,6 +179,11 @@ def dispatch(args: argparse.Namespace):
         )
     if args.tool == "worklog_delete":
         return worklog_delete.worklog_delete(args.issue_key, args.worklog_id, confirm=args.confirm)
+    if args.tool == "triage":
+        parent_types = args.parent_issue_types.split(",") if args.parent_issue_types else None
+        return triage.triage(
+            project=args.project, parent_issue_types=parent_types, max_results=args.max_results
+        )
     raise AssertionError(f"Unhandled tool: {args.tool}")  # unreachable: argparse enforces choices
 
 
