@@ -1,12 +1,8 @@
 """Authentication and configuration handling for the Jira Assistant skill.
 
 Credentials are always sourced from environment variables. No credentials
-may be hard-coded or embedded in source. Supports two authentication
-modes against self-hosted (or cloud) Jira instances:
-
-* Basic auth (username + password) -- the default.
-* Personal Access Token (PAT / bearer token) -- opt-in via
-  ``JIRA_AUTH_MODE=pat``.
+may be hard-coded or embedded in source. Only HTTP Basic auth
+(username + password) is supported.
 """
 
 from __future__ import annotations
@@ -14,17 +10,9 @@ from __future__ import annotations
 import logging
 import os
 from dataclasses import dataclass
-from enum import Enum
 from typing import Mapping, Optional
 
 logger = logging.getLogger("jira_skill.auth")
-
-
-class AuthMode(str, Enum):
-    """Supported authentication strategies."""
-
-    BASIC = "basic"
-    PAT = "pat"
 
 
 class ConfigurationError(RuntimeError):
@@ -37,10 +25,8 @@ class JiraConfig:
 
     Attributes:
         base_url: Root URL of the Jira instance, e.g. ``https://jira.example.com``.
-        auth_mode: Which authentication strategy to use.
-        username: Basic-auth username. Required when ``auth_mode`` is BASIC.
-        password: Basic-auth password. Required when ``auth_mode`` is BASIC.
-        api_token: Personal access token. Required when ``auth_mode`` is PAT.
+        username: Basic-auth username.
+        password: Basic-auth password.
         timeout_seconds: Per-request network timeout.
         max_retries: Maximum retry attempts for idempotent/rate-limited requests.
         verify_ssl: Whether to verify TLS certificates (disable only for
@@ -51,10 +37,8 @@ class JiraConfig:
     """
 
     base_url: str
-    auth_mode: AuthMode
-    username: Optional[str] = None
-    password: Optional[str] = None
-    api_token: Optional[str] = None
+    username: str
+    password: str
     timeout_seconds: float = 30.0
     max_retries: int = 3
     verify_ssl: bool = True
@@ -62,8 +46,6 @@ class JiraConfig:
 
     def auth_summary(self) -> str:
         """Return a redacted, human-readable description of the auth mode."""
-        if self.auth_mode is AuthMode.PAT:
-            return "Personal Access Token (bearer)"
         return f"Basic auth (user={self.username})"
 
 
@@ -115,9 +97,7 @@ def load_config(env: Optional[Mapping[str, str]] = None) -> JiraConfig:
 
     Environment variables:
         JIRA_BASE_URL (required): Root URL of the Jira instance.
-        JIRA_AUTH_MODE (optional): "basic" (default) or "pat".
-        JIRA_USERNAME / JIRA_PASSWORD (required for basic auth).
-        JIRA_API_TOKEN (required for PAT auth).
+        JIRA_USERNAME / JIRA_PASSWORD (required): Basic-auth credentials.
         JIRA_TIMEOUT_SECONDS (optional, default 30).
         JIRA_MAX_RETRIES (optional, default 3).
         JIRA_VERIFY_SSL (optional, default true).
@@ -137,41 +117,22 @@ def load_config(env: Optional[Mapping[str, str]] = None) -> JiraConfig:
             f"JIRA_BASE_URL={base_url!r} must start with http:// or https://"
         )
 
-    auth_mode_raw = (_env(source, "JIRA_AUTH_MODE", "basic") or "basic").lower()
-    try:
-        auth_mode = AuthMode(auth_mode_raw)
-    except ValueError as exc:
-        raise ConfigurationError(
-            f"JIRA_AUTH_MODE={auth_mode_raw!r} is invalid. Must be 'basic' or 'pat'."
-        ) from exc
-
     username = _env(source, "JIRA_USERNAME")
     password = _env(source, "JIRA_PASSWORD")
-    api_token = _env(source, "JIRA_API_TOKEN")
-
-    if auth_mode is AuthMode.BASIC:
-        missing = [
-            name
-            for name, value in (("JIRA_USERNAME", username), ("JIRA_PASSWORD", password))
-            if not value
-        ]
-        if missing:
-            raise ConfigurationError(
-                "Basic authentication selected (JIRA_AUTH_MODE=basic, the default) "
-                f"but the following environment variables are missing: {', '.join(missing)}"
-            )
-    else:  # PAT
-        if not api_token:
-            raise ConfigurationError(
-                "JIRA_AUTH_MODE=pat selected but JIRA_API_TOKEN is not set."
-            )
+    missing = [
+        name
+        for name, value in (("JIRA_USERNAME", username), ("JIRA_PASSWORD", password))
+        if not value
+    ]
+    if missing:
+        raise ConfigurationError(
+            f"The following environment variables are missing: {', '.join(missing)}"
+        )
 
     config = JiraConfig(
         base_url=base_url,
-        auth_mode=auth_mode,
         username=username,
         password=password,
-        api_token=api_token,
         timeout_seconds=_env_float(source, "JIRA_TIMEOUT_SECONDS", 30.0),
         max_retries=_env_int(source, "JIRA_MAX_RETRIES", 3),
         verify_ssl=_env_bool(source, "JIRA_VERIFY_SSL", True),

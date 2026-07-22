@@ -7,8 +7,7 @@ error normalization, and (optional) response caching, so that behavior is
 consistent everywhere and never duplicated.
 
 Supports both Jira Cloud and self-hosted Jira Server / Data Center via an
-explicit ``base_url``, using either HTTP Basic auth (username + password)
-or a Personal Access Token / bearer token.
+explicit ``base_url``, using HTTP Basic auth (username + password).
 """
 
 from __future__ import annotations
@@ -23,7 +22,7 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-from .auth import AuthMode, JiraConfig, load_config
+from .auth import JiraConfig, load_config
 from .models import (
     Board,
     ChangelogEntry,
@@ -158,11 +157,7 @@ class JiraClient:
         session.mount("https://", adapter)
         session.headers.update({"Accept": "application/json", "Content-Type": "application/json"})
 
-        if self.config.auth_mode is AuthMode.PAT:
-            session.headers["Authorization"] = f"Bearer {self.config.api_token}"
-        else:
-            session.auth = (self.config.username or "", self.config.password or "")
-
+        session.auth = (self.config.username, self.config.password)
         session.verify = self.config.verify_ssl
         return session
 
@@ -230,8 +225,8 @@ class JiraClient:
 
         if status == 401:
             raise JiraAuthError(
-                f"Jira authentication failed (401). Check JIRA_USERNAME/JIRA_PASSWORD "
-                f"or JIRA_API_TOKEN. Details: {message}",
+                f"Jira authentication failed (401). Check JIRA_USERNAME/JIRA_PASSWORD. "
+                f"Details: {message}",
                 status_code=status,
             )
         if status == 403:

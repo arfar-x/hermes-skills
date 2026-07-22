@@ -1,6 +1,6 @@
 from unittest.mock import MagicMock, patch
 
-from lib.auth import AuthMode, JiraConfig
+from lib.auth import JiraConfig
 from lib.models import Comment, Issue, IssueLink, Sprint, Worklog
 from tools import blockers, issue_summary, my_work, search, sprint, transition, worklog
 
@@ -24,7 +24,6 @@ def _issue(key="PAY-1", status="To Do", links=None, priority="High", updated="20
 def _fake_config(auto_confirm=False):
     return JiraConfig(
         base_url="https://jira.example.com",
-        auth_mode=AuthMode.BASIC,
         username="alice",
         password="secret",
         auto_confirm_writes=auto_confirm,

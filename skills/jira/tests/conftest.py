@@ -8,7 +8,7 @@ SKILL_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if SKILL_ROOT not in sys.path:
     sys.path.insert(0, SKILL_ROOT)
 
-from lib.auth import AuthMode, JiraConfig  # noqa: E402
+from lib.auth import JiraConfig  # noqa: E402
 from lib.jira_client import JiraClient, reset_client  # noqa: E402
 
 
@@ -16,7 +16,6 @@ from lib.jira_client import JiraClient, reset_client  # noqa: E402
 def jira_config() -> JiraConfig:
     return JiraConfig(
         base_url="https://jira.example.com",
-        auth_mode=AuthMode.BASIC,
         username="alice",
         password="secret",
         max_retries=0,

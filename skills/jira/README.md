@@ -27,7 +27,7 @@ the model.
 ## Project layout
 
 ```
-skills/jira-assistant/
+skills/jira/
 ├── SKILL.md                # Hermes manifest: frontmatter + agent instructions
 ├── scripts/
 │   └── jira_tool.py         # CLI dispatcher the agent runs via `terminal`
@@ -60,10 +60,8 @@ ever hard-coded.**
 | Variable | Required | Default | Description |
 |---|---|---|---|
 | `JIRA_BASE_URL` | Yes | -- | Root URL of your Jira instance, e.g. `https://jira.mycompany.com` |
-| `JIRA_AUTH_MODE` | No | `basic` | `basic` or `pat` |
-| `JIRA_USERNAME` | If `basic` | -- | Basic-auth username |
-| `JIRA_PASSWORD` | If `basic` | -- | Basic-auth password |
-| `JIRA_API_TOKEN` | If `pat` | -- | Personal Access Token (sent as a bearer token) |
+| `JIRA_USERNAME` | Yes | -- | Basic-auth username |
+| `JIRA_PASSWORD` | Yes | -- | Basic-auth password |
 | `JIRA_TIMEOUT_SECONDS` | No | `30` | Per-request timeout |
 | `JIRA_MAX_RETRIES` | No | `3` | Retries for `429`/`5xx` responses |
 | `JIRA_VERIFY_SSL` | No | `true` | Disable only for trusted self-signed internal instances |
@@ -72,14 +70,13 @@ ever hard-coded.**
 
 Configuration is validated eagerly: `lib.auth.load_config()` raises a
 `ConfigurationError` with a specific, actionable message if required
-variables are missing or inconsistent (e.g. `basic` mode selected without
-a password). Wire this into your Hermes installation's startup/health
-check so misconfiguration fails fast instead of at first tool call.
+variables are missing (e.g. `JIRA_PASSWORD` not set). Wire this into
+your Hermes installation's startup/health check so misconfiguration
+fails fast instead of at first tool call.
 
-By default this skill uses HTTP Basic auth (`JIRA_USERNAME` +
+This skill only supports HTTP Basic auth (`JIRA_USERNAME` +
 `JIRA_PASSWORD`), which works against both Jira Cloud and self-hosted
-Jira Server/Data Center. Set `JIRA_AUTH_MODE=pat` with `JIRA_API_TOKEN`
-to use a Personal Access Token instead.
+Jira Server/Data Center.
 
 ## Tools
 
@@ -122,7 +119,7 @@ Hermes discovers skills as `SKILL.md`-fronted directories, either under
 `~/.hermes/skills/<skill-name>/` or under a directory of your own
 choosing that you list in your local Hermes settings (see Hermes' own
 docs for the exact setting name). Doing the latter and pointing it at
-the `skills/` directory that contains `jira-assistant/` means you don't
+the `skills/` directory that contains `jira/` means you don't
 need to copy this repo anywhere -- it's available immediately, with live
 edits.
 
@@ -140,7 +137,7 @@ edits.
    uses to run `terminal`/`execute_code`):
 
    ```bash
-   pip install -r /path/to/your/local/checkout/of/hermes-jira/skills/jira-assistant/requirements.txt
+   pip install -r /path/to/your/local/checkout/of/hermes-jira/skills/jira/requirements.txt
    ```
 
 3. Set the environment variables from the table above wherever Hermes'
@@ -148,12 +145,12 @@ edits.
    `required_environment_variables` will also prompt for them on first
    use if Hermes' onboarding flow supports it).
 
-4. In a Hermes chat, run `/skills` to confirm `jira-assistant` is listed,
-   or invoke it directly with `/jira-assistant`.
+4. In a Hermes chat, run `/skills` to confirm `jira` is listed,
+   or invoke it directly with `/jira`.
 
 Alternatively, if your Hermes deployment can't use `external_dirs` (e.g.
 a remote/managed instance), install by copying:
-`cp -r skills/jira-assistant ~/.hermes/skills/jira-assistant`. Note this
+`cp -r skills/jira ~/.hermes/skills/jira`. Note this
 creates a disconnected copy -- future changes to this repo won't apply
 until you re-copy.
 

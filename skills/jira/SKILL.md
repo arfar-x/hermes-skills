@@ -1,5 +1,5 @@
 ---
-name: jira-assistant
+name: jira
 description: >-
   High-level Jira assistant. Answers questions like "what should I work
   on next", "summarize my tickets", "what's blocking PAY-123", logs work,
@@ -17,18 +17,12 @@ required_environment_variables:
   - name: JIRA_BASE_URL
     prompt: "Jira base URL (e.g. https://jira.mycompany.com)"
     required_for: all functionality
-  - name: JIRA_AUTH_MODE
-    prompt: "Auth mode: 'basic' (default) or 'pat'"
-    required_for: optional, defaults to basic
   - name: JIRA_USERNAME
     prompt: "Jira username"
-    required_for: basic auth mode (the default)
+    required_for: all functionality
   - name: JIRA_PASSWORD
     prompt: "Jira password"
-    required_for: basic auth mode (the default)
-  - name: JIRA_API_TOKEN
-    prompt: "Jira Personal Access Token"
-    required_for: pat auth mode
+    required_for: all functionality
   - name: JIRA_AUTO_CONFIRM_WRITES
     prompt: "Skip the confirm step before logging work / transitioning tickets? (true/false)"
     required_for: optional, defaults to false (asks before every write)
