@@ -449,6 +449,17 @@ class JiraClient:
             return None
         return f"{self.config.base_url}/browse/{issue_key}"
 
+    def resolve_project(self, project: Optional[str] = None) -> Optional[str]:
+        """Resolve an explicit ``project`` against ``JIRA_DEFAULT_PROJECT``.
+
+        Returns ``None`` (not a guess) if neither is available -- callers
+        that require a project (e.g. ``triage``) should raise on ``None``
+        themselves; callers where a project is only an optional narrowing
+        (e.g. ``search_users``) can fall back to an unscoped call.
+        """
+        resolved = (project or self.config.default_project or "").strip()
+        return resolved or None
+
     def _build_issue_links(self, raw_links: List[Dict[str, Any]]) -> List[IssueLink]:
         links: List[IssueLink] = []
         for raw_link in raw_links or []:
@@ -862,7 +873,14 @@ class JiraClient:
             "issue_counts_by_column": counts,
         }
 
-    def search_users(self, query: str, *, max_results: int = 25) -> List[User]:
+    def search_users(
+        self,
+        query: str,
+        *,
+        project: Optional[str] = None,
+        all_projects: bool = False,
+        max_results: int = 25,
+    ) -> List[User]:
         """Search for users by name/email fragment (for assignee lookups).
 
         Sends both ``query`` and ``username`` for the same value: Jira
@@ -872,14 +890,41 @@ class JiraClient:
         required") even when ``query`` is also present. Sending both is the
         cheapest way to support both flavors without knowing which one a
         given ``base_url`` points at.
+
+        Args:
+            query: Name, username, or email fragment, e.g. ``"sam"``.
+            project: When given (or falling back to ``JIRA_DEFAULT_PROJECT``
+                if set), scopes the search to users assignable in that
+                project instead of every user on the instance -- narrower,
+                and disambiguates common names that only collide globally
+                (e.g. two "Sam"es instance-wide, one of them not on this
+                project). Falls back to an unscoped search if neither is
+                available.
+            all_projects: Force an unscoped, instance-wide search, ignoring
+                both ``project`` and ``JIRA_DEFAULT_PROJECT``. Use this to
+                broaden after a scoped search comes back empty -- merely
+                omitting ``project`` is not enough to do that when
+                ``JIRA_DEFAULT_PROJECT`` is configured, since it would still
+                apply.
+            max_results: Safety cap on the number of users returned.
         """
         if not query or not query.strip():
             raise JiraValidationError("search_users query must not be empty.")
-        payload = self._request(
-            "GET",
-            f"{self.API_V2}/user/search",
-            params={"query": query, "username": query, "maxResults": max_results},
-        )
+
+        resolved_project = None if all_projects else self.resolve_project(project)
+        if resolved_project:
+            path = f"{self.API_V2}/user/assignable/search"
+            params: Dict[str, Any] = {
+                "project": resolved_project,
+                "query": query,
+                "username": query,
+                "maxResults": max_results,
+            }
+        else:
+            path = f"{self.API_V2}/user/search"
+            params = {"query": query, "username": query, "maxResults": max_results}
+
+        payload = self._request("GET", path, params=params)
         raw_users = payload if isinstance(payload, list) else payload.get("values", [])
         return [self._build_user(raw) for raw in raw_users]
 
@@ -924,7 +969,7 @@ class JiraClient:
                "subtasks": [{"key", "url", "summary", "status", "labels"}, ...]},
                ...]}``
         """
-        resolved_project = (project or self.config.default_project or "").strip()
+        resolved_project = self.resolve_project(project)
         if not resolved_project:
             raise JiraValidationError(
                 "No project given and JIRA_DEFAULT_PROJECT is not set. Pass an explicit "

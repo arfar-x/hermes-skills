@@ -386,6 +386,78 @@ def test_search_users_sends_both_query_and_username_params(client, mock_session)
     assert kwargs["params"]["username"] == "john"
 
 
+def test_search_users_unscoped_hits_plain_user_search(client, mock_session):
+    mock_session.request.return_value = make_response(json_data=[])
+    client.search_users("sam")
+    method, url = mock_session.request.call_args[0][:2]
+    assert url.endswith("/user/search")
+
+
+def test_search_users_scoped_by_explicit_project_hits_assignable_search(client, mock_session):
+    mock_session.request.return_value = make_response(json_data=[])
+    client.search_users("sam", project="PAYKAN")
+    method, url = mock_session.request.call_args[0][:2]
+    assert url.endswith("/user/assignable/search")
+    _, kwargs = mock_session.request.call_args
+    assert kwargs["params"]["project"] == "PAYKAN"
+    assert kwargs["params"]["query"] == "sam"
+    assert kwargs["params"]["username"] == "sam"
+
+
+def test_search_users_scoped_by_default_project_from_config(jira_config, mock_session):
+    from dataclasses import replace
+
+    from lib.jira_client import JiraClient
+
+    configured_client = JiraClient(config=replace(jira_config, default_project="PAYKAN"), session=mock_session)
+    mock_session.request.return_value = make_response(json_data=[])
+    configured_client.search_users("sam")
+    method, url = mock_session.request.call_args[0][:2]
+    assert url.endswith("/user/assignable/search")
+    _, kwargs = mock_session.request.call_args
+    assert kwargs["params"]["project"] == "PAYKAN"
+
+
+def test_search_users_explicit_project_overrides_default_project(jira_config, mock_session):
+    from dataclasses import replace
+
+    from lib.jira_client import JiraClient
+
+    configured_client = JiraClient(config=replace(jira_config, default_project="PAYKAN"), session=mock_session)
+    mock_session.request.return_value = make_response(json_data=[])
+    configured_client.search_users("sam", project="OTHER")
+    _, kwargs = mock_session.request.call_args
+    assert kwargs["params"]["project"] == "OTHER"
+
+
+def test_search_users_all_projects_ignores_explicit_and_default_project(jira_config, mock_session):
+    from dataclasses import replace
+
+    from lib.jira_client import JiraClient
+
+    configured_client = JiraClient(config=replace(jira_config, default_project="PAYKAN"), session=mock_session)
+    mock_session.request.return_value = make_response(json_data=[])
+    configured_client.search_users("sam", project="OTHER", all_projects=True)
+    method, url = mock_session.request.call_args[0][:2]
+    assert url.endswith("/user/search")
+    _, kwargs = mock_session.request.call_args
+    assert "project" not in kwargs["params"]
+
+
+def test_resolve_project_returns_none_when_neither_given(client):
+    assert client.resolve_project(None) is None
+
+
+def test_resolve_project_falls_back_to_config_default(jira_config, mock_session):
+    from dataclasses import replace
+
+    from lib.jira_client import JiraClient
+
+    configured_client = JiraClient(config=replace(jira_config, default_project="PAYKAN"), session=mock_session)
+    assert configured_client.resolve_project(None) == "PAYKAN"
+    assert configured_client.resolve_project("OTHER") == "OTHER"
+
+
 def test_create_issue_requires_project_summary_and_type(client):
     with pytest.raises(JiraValidationError):
         client.create_issue("", "Fix bug", "Bug")

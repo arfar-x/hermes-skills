@@ -111,7 +111,7 @@ Jira Server/Data Center.
 | `issue_summary(issue_key, sections)` | Read | Issue + comments + worklogs + changelog + links, as one document (or a subset via `sections`) |
 | `blockers(issue_key)` | Read | `{"blocked": bool, "reasons": [...]}` from links/status/comments |
 | `search(jql, fields, only)` | Read | Arbitrary JQL, structured issue results, projected to exactly the named fields in `only` (default: everything except `description`/time-tracking) |
-| `search_users(query, max_results)` | Read | Look up users by name/email fragment, to resolve an `account_id` for assignee filters/fields |
+| `search_users(query, project, all_projects, max_results)` | Read | Look up users by name/email fragment, to resolve an `account_id` for assignee filters/fields; `project` scopes to that project's assignable users (narrower, disambiguates common names), `all_projects` forces an unscoped search |
 | `transition(issue_key, status, confirm)` | Write (gated) | Move an issue to a status; transition IDs resolved automatically |
 | `worklog(issue_key, duration, description, date, confirm)` | Write (gated) | Log time against an issue, optionally backdated |
 | `worklog_edit(issue_key, worklog_id, duration, description, date, confirm)` | Write (gated) | Update an existing worklog's duration/description/date |

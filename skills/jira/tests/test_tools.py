@@ -198,11 +198,37 @@ def test_search_rejects_unknown_field_name():
 
 def test_search_users_returns_query_count_and_users():
     mock_client = MagicMock()
+    mock_client.resolve_project.return_value = None
     mock_client.search_users.return_value = [User(account_id="abc123", display_name="John Smith")]
     with patch("tools.search_users.get_client", return_value=mock_client):
         result = search_users.search_users("john")
     assert result["count"] == 1
     assert result["users"][0]["account_id"] == "abc123"
+    assert result["project"] is None
+
+
+def test_search_users_passes_project_through_to_client():
+    mock_client = MagicMock()
+    mock_client.resolve_project.return_value = "PAYKAN"
+    mock_client.search_users.return_value = []
+    with patch("tools.search_users.get_client", return_value=mock_client):
+        result = search_users.search_users("sam", project="PAYKAN")
+    mock_client.search_users.assert_called_once_with(
+        "sam", project="PAYKAN", all_projects=False, max_results=25
+    )
+    assert result["project"] == "PAYKAN"
+
+
+def test_search_users_reports_no_project_when_all_projects_forced():
+    mock_client = MagicMock()
+    mock_client.search_users.return_value = []
+    with patch("tools.search_users.get_client", return_value=mock_client):
+        result = search_users.search_users("sam", project="PAYKAN", all_projects=True)
+    mock_client.search_users.assert_called_once_with(
+        "sam", project="PAYKAN", all_projects=True, max_results=25
+    )
+    assert result["project"] is None
+    mock_client.resolve_project.assert_not_called()
 
 
 def test_search_users_rejects_empty_query():

@@ -148,8 +148,11 @@ python3 scripts/jira_tool.py search --jql "assignee = currentUser() AND updated 
 python3 scripts/jira_tool.py list_fields
 
 # Look up a user by name/email fragment, to get an account_id for JQL
-# assignee filters or create_issue/edit_issue's --assignee_account_id
-python3 scripts/jira_tool.py search_users --query john
+# assignee filters or create_issue/edit_issue's --assignee_account_id.
+# --project scopes to that project's assignable users (narrower, resolves
+# common-name collisions) -- falls back to JIRA_DEFAULT_PROJECT, then
+# an unscoped instance-wide search
+python3 scripts/jira_tool.py search_users --query john [--project PAY] [--all_projects]
 
 # Active sprint / board / dates / goal
 python3 scripts/jira_tool.py sprint
@@ -292,9 +295,17 @@ subtask workflow across many stories.
 
 **"Find John's tasks that I reported, due tomorrow."** (ad hoc, no dedicated tool)
 Per rule 9, chain `search_users` + `search` rather than writing new code:
-run `search_users --query john` (ask the user to disambiguate if more than
-one match), resolve "tomorrow" to an actual calendar date yourself, then
-run `search --jql "assignee = <account_id> AND reporter = currentUser() AND due = <date>"`.
+run `search_users --query john` (add `--project` if a project is already
+known/relevant -- narrows the match and often resolves a common-name
+collision on its own). If the scoped search comes back with `count: 0`
+(check the result's `project` field, not just what you passed, since
+`JIRA_DEFAULT_PROJECT` may have applied silently), don't conclude there's
+no such user -- ask the user whether to broaden to an instance-wide search
+and only then retry with `--all_projects` (omitting `--project` isn't
+enough to bypass `JIRA_DEFAULT_PROJECT`). If still ambiguous after a
+scoped attempt, ask the user to disambiguate. Once resolved, resolve
+"tomorrow" to an actual calendar date yourself, then run
+`search --jql "assignee = <account_id> AND reporter = currentUser() AND due = <date>"`.
 
 **"Create a bug for the checkout crash."**
 Confirm the project, summary, and issue type with the user, then run

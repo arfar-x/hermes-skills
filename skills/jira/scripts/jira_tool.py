@@ -22,7 +22,7 @@ Usage:
         [--duration 2h] [--description "..."] [--date 2026-07-20] [--confirm]
     python scripts/jira_tool.py worklog_delete --issue_key PAY-123 --worklog_id 28459 [--confirm]
     python scripts/jira_tool.py triage [--project PAYKAN] [--parent_issue_types Story,Bug,Task]
-    python scripts/jira_tool.py search_users --query john
+    python scripts/jira_tool.py search_users --query john [--project PAYKAN] [--all_projects]
     python scripts/jira_tool.py create_issue --project PAYKAN --summary "..." \\
         --issue_type Story [--description "..."] [--parent_key PAYKAN-100] \\
         [--labels Frontend,UX] [--assignee_account_id ...] [--priority High] \\
@@ -171,6 +171,18 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = subparsers.add_parser("search_users", help="Look up users by name/email fragment")
     p.add_argument("--query", required=True, help='Name, username, or email fragment, e.g. "john"')
+    p.add_argument(
+        "--project",
+        default=None,
+        help="Scope to users assignable in this project (narrower, disambiguates common "
+        "names). Falls back to JIRA_DEFAULT_PROJECT if omitted, then to an unscoped search.",
+    )
+    p.add_argument(
+        "--all_projects",
+        action="store_true",
+        help="Force an unscoped, instance-wide search, ignoring --project and "
+        "JIRA_DEFAULT_PROJECT both -- use to broaden after a scoped search finds no match.",
+    )
     p.add_argument("--max_results", type=int, default=25)
 
     p = subparsers.add_parser(
@@ -255,7 +267,9 @@ def dispatch(args: argparse.Namespace):
             project=args.project, parent_issue_types=parent_types, max_results=args.max_results
         )
     if args.tool == "search_users":
-        return search_users.search_users(args.query, max_results=args.max_results)
+        return search_users.search_users(
+            args.query, project=args.project, all_projects=args.all_projects, max_results=args.max_results
+        )
     if args.tool == "create_issue":
         labels = args.labels.split(",") if args.labels else None
         components = args.components.split(",") if args.components else None
