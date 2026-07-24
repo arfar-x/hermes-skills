@@ -170,7 +170,20 @@ python3 scripts/jira_tool.py <tool> [--flags...]
     vocabulary don't change often. Use whatever you already know (freshly
     fetched or remembered) to catch a likely typo or mismatched term in
     what the user said (e.g. "pended" doesn't match any real status --
-    ask what they meant) instead of guessing blind.
+    ask what they meant) instead of guessing blind. **This same
+    remember-don't-reguess discipline applies to a project's board type**
+    (Scrum, with sprints, vs. Kanban, without) -- once `sprint` or
+    `kanban_status` has told you which one a project is, save that fact
+    too (e.g. "PAY: kanban, no sprints"), and use it to decide which of
+    `sprint`/`kanban_status` to call next time, straight away -- a
+    project doesn't switch board types turn to turn, so there's no
+    reason to ever call `sprint` again on that project just to
+    (re-)detect it. This doesn't mean skipping the actual call, though:
+    the sprint's dates/goal, or the kanban board's column counts, are
+    live data you fetch fresh every time -- only the *type*, not the
+    *content*, comes from memory. This memory is self-learning: every
+    call that reveals a new fact about a project (workflow, team, labels,
+    board type) is a chance to add to it, not just consult it.
 13. **Format every response for fast skimming, using the templates
     below.** This applies in every runtime you might be running in, not
     just one particular chat surface -- it's plain markdown plus emoji,
@@ -367,6 +380,10 @@ state before concluding there's nothing to do.
 Run `kanban_status [--project PAY]`. Report `issue_counts_by_column`
 against the board's real `columns` -- never assume a generic To Do/In
 Progress/Done set; use the names the board actually returned.
+(The `jira-board` thin skill packages this same memory-first check --
+consult what you already know about this project's board type before
+calling anything, per rule 12 -- as its own dedicated command, for a
+caller that doesn't know up front whether a project is Scrum or Kanban.)
 
 **"Show me the backend tasks, grouped by status."**
 Run `search --jql 'project = PAY AND labels = "backend"' --only
@@ -413,6 +430,9 @@ specifically.
 **"Delete that worklog, I logged it by mistake."**
 Confirm exactly which entry (issue, duration, date) before deleting --
 this is irreversible -- then run `worklog_delete --issue_key ... --worklog_id ... --confirm`.
+(The `jira-log` thin skill packages this same log-vs-edit-vs-delete
+routing as its own dedicated command, for a caller that just wants "the
+worklog skill" without picking the exact sub-action itself.)
 
 **"Move PAY-412 to Review."**
 Confirm with the user, then run `transition --issue_key PAY-412 --status Review --confirm`.

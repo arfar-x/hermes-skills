@@ -42,6 +42,20 @@ in -- pass `--board_id` directly only if you already know the exact
 board. Errors (as `"error"` in the JSON) if no board is found for the
 resolved scope; don't fall back to an unrelated board.
 
+If you don't know whether this project is Scrum or Kanban, use
+`jira-board` instead -- it looks the type up from memory rather than
+guessing, and still always fetches the live data (see below).
+
+**Check memory for the board, not for the counts.** A project's board
+type/id barely change; `issue_counts_by_column` does, constantly -- so
+never skip *this* call because you remember a prior count, but if you
+already know `--board_id` for this project (from memory, or a prior
+`sprint`/`jira-board` call this conversation), pass it directly instead
+of re-resolving via `--project` each time. Whatever this call teaches
+you about the board itself (id, type, column names) is worth remembering
+for next time (self-learning, same as `jira-project-context`'s
+statuses/team/labels).
+
 Prints one JSON document: `{"board_id": ..., "columns": [...],
 "issue_counts_by_column": {...}}` -- `columns` is the board's real
 column names (its actual workflow, not a guessed To Do/In Progress/Done

@@ -55,7 +55,8 @@ this JSON.
 - `--fields` (optional, comma-separated) requests extra *raw* Jira field
   IDs in addition to `--only` -- use it for instance-specific custom
   fields, e.g. a "Figma Link" field, always surfaced in `custom_fields`.
-  Discover its ID first via the `jira-list-fields` skill; never guess a
+  Discover its ID first by running `list_fields` (via the `jira` skill's
+  CLI, `python3 ../jira/scripts/jira_tool.py list_fields`); never guess a
   `customfield_NNNNN` id.
 - **`--only`'s field names and `--jql`'s field names are different
   vocabularies -- don't mix them up.** `--only` uses this skill's own

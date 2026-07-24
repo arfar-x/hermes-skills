@@ -63,6 +63,14 @@ Jira fresh. Only re-fetch if you have a specific reason to think something
 changed (e.g. the user mentions a status/person that doesn't match what
 you remember).
 
+This same discipline isn't specific to this skill -- it's self-learning
+across the whole toolset. `jira-search-users` (account_ids),
+`jira-sprint`/`jira-kanban-status`/`jira-board` (a project's board
+type/id) each ask the same question before calling anything: do you
+already know this? Whatever any of them teaches you is worth folding
+into the same per-project memory this skill seeds, not just what this
+specific call returns.
+
 ## Using the result
 
 - `statuses` / `statuses_by_issue_type` -- use to confirm an exact status

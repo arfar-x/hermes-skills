@@ -19,6 +19,9 @@ required_environment_variables:
   - name: JIRA_PASSWORD
     prompt: "Jira password"
     required_for: basic auth mode (the default)
+  - name: JIRA_DEFAULT_PROJECT
+    prompt: "Default Jira project key (e.g. PAY), if you always work on the same project"
+    required_for: optional -- if unset, you must resolve/pass --project yourself
 ---
 
 # Jira: Sprint
@@ -37,6 +40,20 @@ worked in, not an arbitrary board elsewhere in the instance -- pass
 `--board_id` directly only if you already know the exact board. If
 neither a project nor `--board_id` resolves, falls back to the first
 board visible to the authenticated user instance-wide.
+
+If you don't know whether this project is Scrum or Kanban, use
+`jira-board` instead -- it looks the type up from memory rather than
+guessing, and still always fetches the live data (see below).
+
+**Check memory first.** A project's board type/id barely change; the
+active sprint's content does. If you (or a prior call this conversation,
+or your runtime's persistent memory) already know this project is
+Kanban, skip this call entirely and go straight to `jira-kanban-status`
+-- don't spend a call confirming something you already know. But don't
+treat a *remembered sprint name/dates* as still current -- always call
+this fresh for the sprint's actual content. If this call teaches you the
+board type/id, that fact is worth remembering for next time (self-
+learning, same as `jira-project-context`'s statuses/team/labels).
 
 Prints one JSON document with the board and active sprint's dates/goal.
 **Not every board has sprints** -- if the resolved board's `type` is

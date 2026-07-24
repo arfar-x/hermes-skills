@@ -44,6 +44,17 @@ turns "John" into that id, so you never have to guess one or fabricate a
 JQL clause like `assignee = "John"` that may not match Jira's actual user
 record.
 
+## Check memory first
+
+A person's `account_id` doesn't change. If you already know it for this
+project -- from `jira-project-context`'s `users`, your runtime's
+persistent memory, or a prior `search_users` call earlier this
+conversation -- use it directly and skip calling this again. If this
+call resolves a name you'll likely need again, that mapping (name ->
+account_id, scoped to the project) is worth remembering the same way
+`jira-project-context` asks you to remember statuses/team/labels --
+self-learning, not a one-off lookup.
+
 ## Scoping to a project
 
 A name search across the whole Jira instance can be ambiguous -- e.g. two

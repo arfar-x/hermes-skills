@@ -87,9 +87,10 @@ Each returned story has:
     frontend, based on the description") -- never state them with the same
     confidence as a `has_frontend_subtask`/`has_backend_subtask` fact.
 - **"Design/Figma ready?"** isn't part of this tool's output (Figma link
-  fields are instance-specific custom fields) -- use the `jira-list-fields`
-  skill to find the field id, then `search --fields <id>` per story, or
-  read it from `description` if the link is embedded in text.
+  fields are instance-specific custom fields) -- run `list_fields` (via
+  the `jira` skill's CLI, `python3 ../jira/scripts/jira_tool.py
+  list_fields`) to find the field id, then `search --fields <id>` per
+  story, or read it from `description` if the link is embedded in text.
 
 ## Project scope
 

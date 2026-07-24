@@ -57,5 +57,9 @@ remove the entry entirely, use `jira-worklog-edit` instead.
 If the result contains `"error"`, tell the user what went wrong in
 plain language instead of retrying silently or fabricating a result.
 
+Not sure whether the request is a new log, a fix to an existing entry,
+or a deletion? Use `jira-log` instead -- it routes to whichever of
+`jira-worklog`/`jira-worklog-edit`/`jira-worklog-delete` fits.
+
 See `../jira/README.md` for architecture details and the full
 environment-variable table.

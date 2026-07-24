@@ -26,12 +26,13 @@ skills/
 ├── jira-blockers/         # Thin skill: blocking status for one issue
 ├── jira-sprint/           # Thin skill: active sprint/board/goal
 ├── jira-kanban-status/    # Thin skill: kanban board columns/issue counts
+├── jira-board/             # Orchestrator: sprint or kanban_status, auto-detected
 ├── jira-worklog/          # Thin skill: log time (write, confirm-gated)
-├── jira-status/           # Thin skill: move an issue's status (write, confirm-gated)
-├── jira-worklog-report/   # Thin skill: logged time vs. estimate over a date range
-├── jira-list-fields/      # Thin skill: enumerate fields to discover a custom field's id
 ├── jira-worklog-edit/     # Thin skill: fix a worklog's duration/description/date (write, confirm-gated)
 ├── jira-worklog-delete/   # Thin skill: permanently delete a worklog (write, confirm-gated)
+├── jira-log/               # Orchestrator: log/edit/delete a worklog, routed by intent (write, confirm-gated)
+├── jira-status/           # Thin skill: move an issue's status (write, confirm-gated)
+├── jira-worklog-report/   # Thin skill: logged time vs. estimate over a date range
 ├── jira-triage/           # Thin skill: group stories with their labeled subtasks for FE/BE/design triage
 ├── jira-search-users/     # Thin skill: look up a user's account_id by name/email
 ├── jira-create-issue/     # Thin skill: create a new issue or subtask (write, confirm-gated)
@@ -50,6 +51,21 @@ maps one `SKILL.md` to exactly one slash command, with no sub-command or
 namespacing support. Every thin skill is a wrapper that calls into
 `<toolset>/scripts/*.py` via a relative path; `<toolset>/` itself also
 still works standalone as a single do-everything skill (e.g. `/jira`).
+
+A thin skill normally maps 1:1 to a single CLI subcommand. The one
+documented exception is an **orchestrator skill** (e.g. `jira-board`,
+`jira-log`): it doesn't add a new action of its own, it routes between
+two or more *existing* thin skills' subcommands based on a condition --
+either a signal returned by one of them (`jira-board` checks whether
+`sprint` reports a kanban board before deciding to call `kanban_status`
+instead) or the caller's own phrasing (`jira-log` picks `worklog` vs.
+`worklog_edit` vs. `worklog_delete` from what's being asked). This keeps
+the underlying sub-skills fully usable standalone for a caller who
+already knows which one they want, while giving one skill/slash command
+to reach for when they don't. Skills still cannot call each other
+programmatically -- an orchestrator's `SKILL.md` body just tells the
+agent which subcommand to run next, the same as any other instruction in
+this repo.
 
 See `skills/jira/README.md` for that toolset's architecture,
 configuration, and test suite -- future toolsets should have their own
@@ -70,12 +86,13 @@ single place to see everything installable at a glance.
 | `jira-blockers` | [jira](skills/jira) | Read | Blocking status + reasons for one issue |
 | `jira-sprint` | [jira](skills/jira) | Read | Active sprint, board, dates, goal (scoped to a project by default) |
 | `jira-kanban-status` | [jira](skills/jira) | Read | Kanban board columns and per-column issue counts |
+| `jira-board` | [jira](skills/jira) | Read | Orchestrator: routes to `jira-sprint` or `jira-kanban-status`, auto-detected |
 | `jira-worklog` | [jira](skills/jira) | Write (gated) | Log time against an issue, optionally backdated |
-| `jira-status` | [jira](skills/jira) | Write (gated) | Move an issue to a new status |
-| `jira-worklog-report` | [jira](skills/jira) | Read | Logged time vs. estimate over a date range, per issue and total |
-| `jira-list-fields` | [jira](skills/jira) | Read | Enumerate every field (incl. custom fields) to discover a custom field's id by name |
 | `jira-worklog-edit` | [jira](skills/jira) | Write (gated) | Update an existing worklog's duration/description/date |
 | `jira-worklog-delete` | [jira](skills/jira) | Write (gated) | Permanently delete a worklog entry |
+| `jira-log` | [jira](skills/jira) | Write (gated) | Orchestrator: routes to `jira-worklog`/`jira-worklog-edit`/`jira-worklog-delete` by intent |
+| `jira-status` | [jira](skills/jira) | Write (gated) | Move an issue to a new status |
+| `jira-worklog-report` | [jira](skills/jira) | Read | Logged time vs. estimate over a date range, per issue and total |
 | `jira-triage` | [jira](skills/jira) | Read | Group unresolved stories/bugs/tasks with their labeled subtasks, for frontend/backend/design-readiness triage |
 | `jira-search-users` | [jira](skills/jira) | Read | Look up a user's account_id by name/email fragment |
 | `jira-create-issue` | [jira](skills/jira) | Write (gated) | Create a new issue or subtask |
