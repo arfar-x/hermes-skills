@@ -64,6 +64,15 @@ def test_my_work_returns_list_with_blocked_flag():
     mock_client.search.assert_called_once()
 
 
+def test_my_work_requests_only_the_fields_it_uses():
+    mock_client = MagicMock()
+    mock_client.search.return_value = []
+    with patch("tools.my_work.get_client", return_value=mock_client):
+        my_work.my_work()
+    _, kwargs = mock_client.search.call_args
+    assert set(kwargs["fields"]) == {"summary", "priority", "status", "updated", "issuelinks"}
+
+
 def test_my_work_wraps_errors_as_json():
     mock_client = MagicMock()
     from lib.jira_client import JiraApiError
@@ -101,6 +110,23 @@ def test_issue_summary_combines_all_sources():
     assert result["issue"]["key"] == "PAY-1"
     assert len(result["comments"]) == 1
     assert len(result["worklogs"]) == 1
+    assert "linked_issues" in result
+
+
+def test_issue_summary_sections_limits_output_and_skips_fetches():
+    mock_client = MagicMock()
+    mock_client.get_issue.return_value = _issue()
+    with patch("tools.issue_summary.get_client", return_value=mock_client):
+        result = issue_summary.issue_summary("PAY-1", sections=["issue"])
+    assert set(result.keys()) == {"issue"}
+    mock_client.get_comments.assert_not_called()
+    mock_client.get_worklogs.assert_not_called()
+    mock_client.get_changelog.assert_not_called()
+
+
+def test_issue_summary_rejects_unknown_section():
+    result = issue_summary.issue_summary("PAY-1", sections=["bogus"])
+    assert result["error"]["type"] == "invalid_input"
 
 
 def test_search_requires_jql():
@@ -139,16 +165,35 @@ def test_search_omits_description_by_default():
     assert "description" not in kwargs["fields"]
 
 
-def test_search_includes_description_when_detailed():
+def test_search_includes_description_when_requested_via_only():
     mock_client = MagicMock()
     issue = _issue()
     object.__setattr__(issue, "description", "a very long description")
     mock_client.search.return_value = [issue]
     with patch("tools.search.get_client", return_value=mock_client):
-        result = search.search("project = PAY", detailed=True)
+        result = search.search("project = PAY", only=["summary", "description"])
     assert result["issues"][0]["description"] == "a very long description"
+    assert "priority" not in result["issues"][0]
     _, kwargs = mock_client.search.call_args
-    assert "description" in kwargs["fields"]
+    assert set(kwargs["fields"]) == {"summary", "description", "status", "issuelinks"}
+
+
+def test_search_only_still_fetches_status_and_links_for_blocked_detection():
+    mock_client = MagicMock()
+    mock_client.search.return_value = [_issue(status="Blocked")]
+    with patch("tools.search.get_client", return_value=mock_client):
+        result = search.search("project = PAY", only=["summary"])
+    assert result["issues"][0]["blocked"] is True
+    assert "status" not in result["issues"][0]
+    assert "links" not in result["issues"][0]
+
+
+def test_search_rejects_unknown_field_name():
+    mock_client = MagicMock()
+    with patch("tools.search.get_client", return_value=mock_client):
+        result = search.search("project = PAY", only=["bogus_field"])
+    assert result["error"]["type"] == "JiraValidationError"
+    mock_client.search.assert_not_called()
 
 
 def test_search_users_returns_query_count_and_users():

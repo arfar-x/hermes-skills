@@ -27,7 +27,7 @@ required_environment_variables:
 Read-only. Run from this skill's directory:
 
 ```bash
-python3 ../jira/scripts/jira_tool.py issue_summary --issue_key PAY-123
+python3 ../jira/scripts/jira_tool.py issue_summary --issue_key PAY-123 [--sections issue,worklogs]
 ```
 
 (First-time setup, once per environment: `pip install -r ../jira/requirements.txt`.)
@@ -36,6 +36,12 @@ python3 ../jira/scripts/jira_tool.py issue_summary --issue_key PAY-123
 comments, worklogs, changelog, and links. Never invent or fabricate
 issue data -- produce a concise natural-language summary of status,
 recent activity, and any linked work, using only what the JSON returned.
+
+`--sections` (optional, comma-separated subset of `issue`, `comments`,
+`worklogs`, `changelog`, `linked_issues`) limits what's fetched and
+returned -- omit it for everything, or narrow it (e.g. `--sections issue`
+for just current fields) when the question doesn't need the full
+history, to save tokens.
 
 If the result contains `"error"`, tell the user what went wrong in
 plain language (not found, permission denied, etc.) instead of

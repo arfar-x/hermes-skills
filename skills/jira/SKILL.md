@@ -114,6 +114,16 @@ python3 scripts/jira_tool.py <tool> [--flags...]
    yourself, then build the JQL and call `search` -- don't write and run a
    new Python script against the Jira REST API to accomplish the same
    thing.
+10. **Ask for only the fields you need.** `search`'s `--only` and
+    `issue_summary`'s `--sections` let you name exactly what to fetch and
+    get back, instead of everything. Default to the tool's default set for
+    open-ended questions; narrow it (e.g. `--only summary,status,priority`,
+    or `--sections issue`) once you know exactly which fields answer the
+    question, especially over many issues at once -- this is the main
+    lever for keeping bulk results token-cheap. `key`, `url`, and
+    `custom_fields` are always present regardless of `--only`, and
+    `blocked` is always computed for `search` even if `status`/`links`
+    weren't explicitly requested.
 
 ## Commands
 
@@ -121,17 +131,18 @@ python3 scripts/jira_tool.py <tool> [--flags...]
 # Unresolved issues assigned to the current user
 python3 scripts/jira_tool.py my_work
 
-# Full context for one issue: fields, comments, worklogs, changelog, links
-python3 scripts/jira_tool.py issue_summary --issue_key PAY-123
+# Full context for one issue: fields, comments, worklogs, changelog, links.
+# --sections limits which parts to fetch/return (default: all)
+python3 scripts/jira_tool.py issue_summary --issue_key PAY-123 [--sections issue,worklogs]
 
 # Blocking status + reasons for one issue
 python3 scripts/jira_tool.py blockers --issue_key PAY-123
 
-# Arbitrary JQL search. Omits each issue's description by default to save
-# tokens on bulk results -- pass --detailed to include it (still always
-# includes components/subtasks/links)
+# Arbitrary JQL search. --only asks for exactly the named fields you need
+# instead of everything (default: everything except description and
+# time-tracking fields); "blocked" is always computed and returned
 python3 scripts/jira_tool.py search --jql "assignee = currentUser() AND updated <= -14d" \
-  [--fields customfield_10056] [--detailed]
+  [--fields customfield_10056] [--only summary,status,priority]
 
 # Enumerate every field (incl. custom fields) to discover a custom field's id by name
 python3 scripts/jira_tool.py list_fields
@@ -274,9 +285,9 @@ caveat an inferred verdict as inferred, never state it as fact the way
 
 **"Based on the description, which tasks need backend or frontend?" (ad hoc, no subtask structure yet)**
 If the user just wants a one-off read of a few issues rather than a full
-triage sweep, `search --detailed` (to get `description` back -- omitted by
-default, see rule below) or `issue_summary` per issue is fine -- reach for
-`triage` instead when the question is really about the Frontend/Backend
+triage sweep, `search --only summary,description` (description is omitted
+by default, see rule below) or `issue_summary` per issue is fine -- reach
+for `triage` instead when the question is really about the Frontend/Backend
 subtask workflow across many stories.
 
 **"Find John's tasks that I reported, due tomorrow."** (ad hoc, no dedicated tool)

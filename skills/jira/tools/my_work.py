@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
-from lib.jira_client import get_client
+from lib.jira_client import get_client, resolve_issue_fields
 from lib.utils import is_issue_blocked
 from tools._common import run_tool
 
@@ -18,6 +18,13 @@ from tools._common import run_tool
 #: status allowlist so this stays correct across differently configured
 #: workflows.
 _UNRESOLVED_JQL = "assignee = currentUser() AND resolution = Unresolved"
+
+#: my_work()'s output is a fixed, small shape -- fetch exactly the fields
+#: it uses (plus "links", needed only to compute "blocked") instead of
+#: Jira's full default field set.
+_MY_WORK_FIELDS, _ = resolve_issue_fields(
+    ["summary", "priority", "status", "updated"], always_fetch=["links"]
+)
 
 
 def my_work(order_by: str = "priority DESC, updated DESC", max_results: int = 100) -> List[Dict[str, Any]]:
@@ -40,7 +47,7 @@ def my_work(order_by: str = "priority DESC, updated DESC", max_results: int = 10
         jql = _UNRESOLVED_JQL
         if order_by:
             jql = f"{jql} ORDER BY {order_by}"
-        issues = client.search(jql, max_results=max_results)
+        issues = client.search(jql, fields=_MY_WORK_FIELDS, max_results=max_results)
         return [
             {
                 "key": issue.key,

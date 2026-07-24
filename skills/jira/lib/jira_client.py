@@ -55,13 +55,86 @@ DEFAULT_ISSUE_FIELDS = [
     "subtasks",
 ]
 
-#: A lighter field set for bulk/list-style calls (search()'s default). Omits
-#: "description" -- free text that can run to paragraphs per issue and is
-#: rarely needed to triage a list of many issues at once, unlike a single
-#: issue_summary/get_issue call where the per-call cost is fixed regardless
-#: of field verbosity. Everything else (links, subtasks, components) is
-#: kept since "blocked" detection and subtask-presence checks depend on it.
-COMPACT_ISSUE_FIELDS = [f for f in DEFAULT_ISSUE_FIELDS if f != "description"]
+#: Maps every named field in Issue.to_dict() (excluding "key"/"url"/
+#: "custom_fields", which are always present) to the raw Jira field key
+#: needed to populate it. This is the lookup table behind
+#: resolve_issue_fields() -- the mechanism that lets a tool ask Jira for,
+#: and return to the caller, only the fields actually needed instead of a
+#: fixed set, which is the main lever for keeping bulk results token-cheap.
+ISSUE_FIELD_MAP: Dict[str, str] = {
+    "summary": "summary",
+    "status": "status",
+    "priority": "priority",
+    "issue_type": "issuetype",
+    "assignee": "assignee",
+    "reporter": "reporter",
+    "updated": "updated",
+    "created": "created",
+    "due_date": "duedate",
+    "labels": "labels",
+    "links": "issuelinks",
+    "description": "description",
+    "components": "components",
+    "subtasks": "subtasks",
+    "original_estimate_seconds": "timeoriginalestimate",
+    "time_spent_seconds": "timespent",
+    "remaining_estimate_seconds": "timeestimate",
+}
+
+#: The output-field selection used when a caller doesn't specify one --
+#: everything except "description" (free text, often the largest single
+#: field on an issue) and the time-tracking fields (rarely needed outside
+#: worklog_report, which requests them explicitly).
+DEFAULT_OUTPUT_FIELDS = [
+    "summary",
+    "status",
+    "priority",
+    "issue_type",
+    "assignee",
+    "reporter",
+    "updated",
+    "created",
+    "due_date",
+    "labels",
+    "links",
+    "components",
+    "subtasks",
+]
+
+
+def resolve_issue_fields(
+    only: Optional[List[str]] = None,
+    *,
+    always_fetch: Optional[List[str]] = None,
+) -> Tuple[List[str], List[str]]:
+    """Translate a caller's named-field selection into what to fetch/return.
+
+    Args:
+        only: Named output fields (keys of ``ISSUE_FIELD_MAP``) to fetch
+            from Jira and include in the response, e.g.
+            ``["summary", "status", "priority"]``. ``None`` selects
+            ``DEFAULT_OUTPUT_FIELDS``.
+        always_fetch: Extra named fields to fetch from Jira (needed to
+            compute something derived, e.g. "blocked" needs "status" and
+            "links") without forcing them into the caller-visible output.
+
+    Returns:
+        ``(jira_fields, output_keys)`` -- pass ``jira_fields`` as
+        ``search()``/``get_issue()``'s ``fields=``, and ``output_keys`` as
+        ``Issue.to_dict(only=...)``'s ``only=``.
+
+    Raises:
+        JiraValidationError: If ``only`` contains an unrecognized name.
+    """
+    output_keys = list(only) if only is not None else list(DEFAULT_OUTPUT_FIELDS)
+    unknown = [name for name in output_keys if name not in ISSUE_FIELD_MAP]
+    if unknown:
+        raise JiraValidationError(
+            f"Unknown field(s) {unknown}. Valid fields: {sorted(ISSUE_FIELD_MAP)}."
+        )
+    fetch_keys = list(dict.fromkeys(output_keys + list(always_fetch or [])))
+    jira_fields = [ISSUE_FIELD_MAP[name] for name in fetch_keys]
+    return jira_fields, output_keys
 
 #: Raw Jira field keys already surfaced as named Issue attributes. Any other
 #: key present in a response's ``fields`` (e.g. a custom field like "Figma

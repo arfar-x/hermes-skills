@@ -452,9 +452,58 @@ def test_edit_issue_sends_only_provided_fields_and_refetches(client, mock_sessio
     assert put_call.kwargs["json"] == {"fields": {"summary": "New title"}}
 
 
-def test_search_compact_fields_omit_description():
-    from lib.jira_client import COMPACT_ISSUE_FIELDS, DEFAULT_ISSUE_FIELDS
+def test_default_output_fields_omit_description_and_time_tracking():
+    from lib.jira_client import DEFAULT_OUTPUT_FIELDS, ISSUE_FIELD_MAP
 
-    assert "description" not in COMPACT_ISSUE_FIELDS
-    assert "description" in DEFAULT_ISSUE_FIELDS
-    assert set(COMPACT_ISSUE_FIELDS) == set(DEFAULT_ISSUE_FIELDS) - {"description"}
+    assert "description" not in DEFAULT_OUTPUT_FIELDS
+    assert "original_estimate_seconds" not in DEFAULT_OUTPUT_FIELDS
+    assert set(DEFAULT_OUTPUT_FIELDS).issubset(ISSUE_FIELD_MAP.keys())
+
+
+def test_resolve_issue_fields_defaults_when_only_omitted():
+    from lib.jira_client import DEFAULT_OUTPUT_FIELDS, ISSUE_FIELD_MAP, resolve_issue_fields
+
+    jira_fields, output_keys = resolve_issue_fields(None)
+    assert output_keys == DEFAULT_OUTPUT_FIELDS
+    assert jira_fields == [ISSUE_FIELD_MAP[name] for name in DEFAULT_OUTPUT_FIELDS]
+
+
+def test_resolve_issue_fields_honors_only_and_dedups_always_fetch():
+    from lib.jira_client import resolve_issue_fields
+
+    jira_fields, output_keys = resolve_issue_fields(["summary", "status"], always_fetch=["status", "links"])
+    assert output_keys == ["summary", "status"]
+    assert jira_fields == ["summary", "status", "issuelinks"]
+
+
+def test_resolve_issue_fields_rejects_unknown_name():
+    from lib.jira_client import resolve_issue_fields
+
+    with pytest.raises(JiraValidationError):
+        resolve_issue_fields(["not_a_real_field"])
+
+
+def test_issue_to_dict_only_filters_but_keeps_key_url_custom_fields():
+    from lib.models import Issue
+
+    issue = Issue(
+        key="PAY-1",
+        summary="Fix bug",
+        status="To Do",
+        priority="High",
+        issue_type="Bug",
+        assignee="Alice",
+        reporter="Bob",
+        updated="2026-07-20",
+        created="2026-07-01",
+        due_date=None,
+        url="https://jira.example.com/browse/PAY-1",
+        custom_fields={"customfield_10056": "https://figma.com/x"},
+    )
+    d = issue.to_dict(only=["summary"])
+    assert d == {
+        "key": "PAY-1",
+        "url": "https://jira.example.com/browse/PAY-1",
+        "custom_fields": {"customfield_10056": "https://figma.com/x"},
+        "summary": "Fix bug",
+    }

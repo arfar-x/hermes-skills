@@ -8,7 +8,7 @@ payloads, only these normalized structures.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterable, List, Optional
 
 
 @dataclass(frozen=True)
@@ -139,8 +139,19 @@ class Issue:
     custom_fields: Dict[str, Any] = field(default_factory=dict)
     url: Optional[str] = None
 
-    def to_dict(self) -> Dict[str, Any]:
-        return {
+    def to_dict(self, only: Optional[Iterable[str]] = None) -> Dict[str, Any]:
+        """Serialize this issue.
+
+        Args:
+            only: When given, keep only these keys (plus "key", "url", and
+                "custom_fields", which are always present) -- used by tools
+                like ``search()`` to return exactly the fields a caller
+                asked for instead of every field, e.g. via
+                ``lib.jira_client.resolve_issue_fields()``. ``None`` (the
+                default) returns every field, unchanged from before this
+                parameter existed.
+        """
+        full = {
             "key": self.key,
             "url": self.url,
             "summary": self.summary,
@@ -162,6 +173,10 @@ class Issue:
             "subtasks": self.subtasks,
             "custom_fields": self.custom_fields,
         }
+        if only is None:
+            return full
+        keep = set(only) | {"key", "url", "custom_fields"}
+        return {k: v for k, v in full.items() if k in keep}
 
 
 @dataclass(frozen=True)

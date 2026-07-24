@@ -27,11 +27,18 @@ assume any particular agent runtime.
   refuse to execute unless called with `confirm=true` (CLI: `--confirm`),
   or `JIRA_AUTO_CONFIRM_WRITES=true` is set. This backs up `SKILL.md`'s
   confirmation rule with an enforced safety net in code.
-- **Bulk reads default to a compact field set.** `search()` omits each
-  issue's `description` unless called with `detailed=true` -- the field
-  most likely to be long free text, and the one least often needed to
-  scan many issues at once. Single-issue tools (`get_issue`,
-  `issue_summary`) always return everything.
+- **Fields are fetched and returned on demand, not by fixed set.**
+  `resolve_issue_fields()` in `lib/jira_client.py` maps every named
+  `Issue` field to the raw Jira field it needs, so a tool can ask for
+  (and get back) only the fields it actually uses instead of a
+  one-size-fits-all field list. `search()` exposes this to the caller as
+  `only=[...]` (defaulting to everything except `description` and
+  time-tracking fields -- the ones least often needed to scan many issues
+  at once); `my_work()` uses it internally to fetch only its fixed
+  output's fields; `issue_summary()` has an analogous `sections=[...]` to
+  skip fetching comments/worklogs/changelog entirely when not needed.
+  Single-issue tools (`get_issue`) still return everything by default,
+  since a single call's cost is fixed regardless of field verbosity.
 
 ## Project layout
 
@@ -101,9 +108,9 @@ Jira Server/Data Center.
 | Tool | Read/Write | Description |
 |---|---|---|
 | `my_work()` | Read | Unresolved issues assigned to the current user |
-| `issue_summary(issue_key)` | Read | Issue + comments + worklogs + changelog + links, as one document |
+| `issue_summary(issue_key, sections)` | Read | Issue + comments + worklogs + changelog + links, as one document (or a subset via `sections`) |
 | `blockers(issue_key)` | Read | `{"blocked": bool, "reasons": [...]}` from links/status/comments |
-| `search(jql, fields, detailed)` | Read | Arbitrary JQL, structured issue results (incl. components/subtasks/custom fields; `description` only when `detailed=true`) |
+| `search(jql, fields, only)` | Read | Arbitrary JQL, structured issue results, projected to exactly the named fields in `only` (default: everything except `description`/time-tracking) |
 | `search_users(query, max_results)` | Read | Look up users by name/email fragment, to resolve an `account_id` for assignee filters/fields |
 | `transition(issue_key, status, confirm)` | Write (gated) | Move an issue to a status; transition IDs resolved automatically |
 | `worklog(issue_key, duration, description, date, confirm)` | Write (gated) | Log time against an issue, optionally backdated |

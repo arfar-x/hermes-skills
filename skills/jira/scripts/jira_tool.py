@@ -9,9 +9,9 @@ parse the result the same way regardless of success or failure.
 
 Usage:
     python scripts/jira_tool.py my_work
-    python scripts/jira_tool.py issue_summary --issue_key PAY-123
+    python scripts/jira_tool.py issue_summary --issue_key PAY-123 [--sections issue,worklogs]
     python scripts/jira_tool.py blockers --issue_key PAY-123
-    python scripts/jira_tool.py search --jql "assignee = currentUser()" [--detailed]
+    python scripts/jira_tool.py search --jql "assignee = currentUser()" [--only summary,status,priority]
     python scripts/jira_tool.py worklog --issue_key PAY-123 --duration 2h \\
         --description "implementing validation" [--date 2026-07-20] [--confirm]
     python scripts/jira_tool.py transition --issue_key PAY-123 --status Review [--confirm]
@@ -82,6 +82,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = subparsers.add_parser("issue_summary", help="Full context for one issue")
     _add_common(p, issue_key=True)
+    p.add_argument(
+        "--sections",
+        default=None,
+        help="Comma-separated subset of issue,comments,worklogs,changelog,linked_issues "
+        "to fetch and return. Omit for all -- pass a subset (e.g. 'issue') to skip "
+        "fetching/returning the rest when you only need current fields.",
+    )
 
     p = subparsers.add_parser("blockers", help="Blocking status and reasons for one issue")
     _add_common(p, issue_key=True)
@@ -92,13 +99,16 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--fields",
         default=None,
-        help="Comma-separated extra field IDs to request (e.g. from list_fields), "
-        "in addition to the default set",
+        help="Comma-separated extra raw field IDs to request (e.g. from list_fields), "
+        "always included in custom_fields regardless of --only",
     )
     p.add_argument(
-        "--detailed",
-        action="store_true",
-        help="Include each issue's description (omitted by default to save tokens on bulk results)",
+        "--only",
+        default=None,
+        help="Comma-separated named fields to fetch and return (e.g. "
+        "summary,status,priority) -- ask for exactly what you need instead of "
+        "everything. Omit for the default set (everything except description "
+        "and time-tracking fields). See SKILL.md for the full list of valid names.",
     )
 
     p = subparsers.add_parser("transition", help="Move an issue to a new status (write, gated)")
@@ -208,14 +218,14 @@ def dispatch(args: argparse.Namespace):
     if args.tool == "my_work":
         return my_work.my_work(order_by=args.order_by, max_results=args.max_results)
     if args.tool == "issue_summary":
-        return issue_summary.issue_summary(args.issue_key)
+        sections = args.sections.split(",") if args.sections else None
+        return issue_summary.issue_summary(args.issue_key, sections=sections)
     if args.tool == "blockers":
         return blockers.blockers(args.issue_key)
     if args.tool == "search":
         extra_fields = args.fields.split(",") if args.fields else None
-        return search.search(
-            args.jql, max_results=args.max_results, fields=extra_fields, detailed=args.detailed
-        )
+        only = args.only.split(",") if args.only else None
+        return search.search(args.jql, max_results=args.max_results, fields=extra_fields, only=only)
     if args.tool == "transition":
         return transition.transition(args.issue_key, args.status, confirm=args.confirm)
     if args.tool == "worklog":
