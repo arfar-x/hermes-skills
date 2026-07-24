@@ -863,13 +863,22 @@ class JiraClient:
         }
 
     def search_users(self, query: str, *, max_results: int = 25) -> List[User]:
-        """Search for users by name/email fragment (for assignee lookups)."""
+        """Search for users by name/email fragment (for assignee lookups).
+
+        Sends both ``query`` and ``username`` for the same value: Jira
+        Cloud's ``/user/search`` accepts ``query`` (matches display name or
+        email); Jira Server/Data Center's pre-8.4 endpoint only recognizes
+        ``username`` and 400s without it ("The username query parameter is
+        required") even when ``query`` is also present. Sending both is the
+        cheapest way to support both flavors without knowing which one a
+        given ``base_url`` points at.
+        """
         if not query or not query.strip():
             raise JiraValidationError("search_users query must not be empty.")
         payload = self._request(
             "GET",
             f"{self.API_V2}/user/search",
-            params={"query": query, "maxResults": max_results},
+            params={"query": query, "username": query, "maxResults": max_results},
         )
         raw_users = payload if isinstance(payload, list) else payload.get("values", [])
         return [self._build_user(raw) for raw in raw_users]

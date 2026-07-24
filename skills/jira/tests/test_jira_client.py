@@ -378,6 +378,14 @@ def test_search_users_maps_display_name_email_and_active(client, mock_session):
     assert users[0].display_name == "John Smith"
 
 
+def test_search_users_sends_both_query_and_username_params(client, mock_session):
+    mock_session.request.return_value = make_response(json_data=[])
+    client.search_users("john")
+    _, kwargs = mock_session.request.call_args
+    assert kwargs["params"]["query"] == "john"
+    assert kwargs["params"]["username"] == "john"
+
+
 def test_create_issue_requires_project_summary_and_type(client):
     with pytest.raises(JiraValidationError):
         client.create_issue("", "Fix bug", "Bug")
