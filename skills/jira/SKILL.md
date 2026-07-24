@@ -262,6 +262,16 @@ Run `my_work --order_by "updated DESC" --max_results 1` -- it comes back
 sorted with exactly the one issue you need, no further sorting or
 scripting required (rule 9). Report that issue's key/summary/status.
 
+**"Show me the backend tasks, grouped by status."**
+Run `search --jql 'project = PAY AND labels = "backend"' --only
+status,assignee,priority,summary`. The grouping itself is just reading the
+returned list and organizing it by each issue's `status` field in your
+reply (a paragraph or a few bullets per status) -- reason over the JSON
+directly, per rule 9. Never write a Python/jq script (piped, heredoc, or
+`-c`) to sort/group/tabulate a result you already have in hand; besides
+being unnecessary, that class of command is exactly what a security
+scanner (Hermes' included) flags and blocks for approval.
+
 **"What's blocking PAY-412?"**
 Run `blockers --issue_key PAY-412`. If `blocked: true`, summarize
 `reasons` in a sentence. If `false`, say nothing is blocking it.
