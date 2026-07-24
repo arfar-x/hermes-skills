@@ -104,7 +104,11 @@ python3 scripts/jira_tool.py <tool> [--flags...]
    mention an issue key in prose, render it as a markdown link using that
    `url`, e.g. `[PAY-123](https://jira.example.com/browse/PAY-123)`, instead
    of a bare key. Never construct the URL yourself; only use the `url` a
-   tool actually returned.
+   tool actually returned. This applies just as much to bulk/grouped
+   output (a status-grouped list, a table, a summary line rolling up
+   several keys) as it does to a single issue mentioned in a sentence --
+   don't drop back to bare keys once you're listing many issues at once;
+   link every one.
 9. **Never write ad-hoc code -- neither to talk to Jira, nor to
    post-process a tool's output.** Every intention this skill needs to
    serve should be reachable by chaining the tools above -- `search`'s
@@ -266,11 +270,13 @@ scripting required (rule 9). Report that issue's key/summary/status.
 Run `search --jql 'project = PAY AND labels = "backend"' --only
 status,assignee,priority,summary`. The grouping itself is just reading the
 returned list and organizing it by each issue's `status` field in your
-reply (a paragraph or a few bullets per status) -- reason over the JSON
-directly, per rule 9. Never write a Python/jq script (piped, heredoc, or
-`-c`) to sort/group/tabulate a result you already have in hand; besides
-being unnecessary, that class of command is exactly what a security
-scanner (Hermes' included) flags and blocks for approval.
+reply (a paragraph or a few bullets per status, each key linked via its
+`url` per rule 8 -- e.g. `[PAY-96](...)`, not a bare `PAY-96`) -- reason
+over the JSON directly, per rule 9. Never write a Python/jq script
+(piped, heredoc, or `-c`) to sort/group/tabulate a result you already
+have in hand; besides being unnecessary, that class of command is
+exactly what a security scanner (Hermes' included) flags and blocks for
+approval.
 
 **"What's blocking PAY-412?"**
 Run `blockers --issue_key PAY-412`. If `blocked: true`, summarize
