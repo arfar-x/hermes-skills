@@ -39,6 +39,16 @@ assume any particular agent runtime.
   skip fetching comments/worklogs/changelog entirely when not needed.
   Single-issue tools (`get_issue`) still return everything by default,
   since a single call's cost is fixed regardless of field verbosity.
+- **Project reference data is fetched fresh, not cached in code.**
+  `project_context()` returns a project's statuses/labels/users/etc. as a
+  plain read, with no disk cache or TTL logic of its own -- reuse across
+  turns is delegated entirely to whatever persistent-memory feature the
+  calling agent runtime already has (Claude Code's memory files, Hermes'
+  memory subsystem, ...), per `SKILL.md`'s rule 12, rather than this skill
+  reimplementing a caching layer that would only duplicate what the
+  runtime already does. Both its user list and its label scan walk
+  bounded pages via `_paginate()`/`search()` rather than requesting one
+  large page of everything.
 
 ## Project layout
 
@@ -65,7 +75,8 @@ skills/jira/
 │   ├── list_fields.py
 │   ├── triage.py
 │   ├── create_issue.py
-│   └── edit_issue.py
+│   ├── edit_issue.py
+│   └── project_context.py
 ├── lib/                     # Shared implementation, not directly agent-facing
 │   ├── jira_client.py       # The single Jira REST client
 │   ├── auth.py              # Env-based configuration + validation
@@ -122,6 +133,7 @@ Jira Server/Data Center.
 | `triage(project, parent_issue_types, max_results)` | Read | Group unresolved parent issues (Story/Bug/Task) with their labeled subtasks, for frontend/backend/design-readiness triage |
 | `create_issue(project, summary, issue_type, description, parent_key, labels, assignee_account_id, priority, components, confirm)` | Write (gated) | Create a new issue or subtask (pass `issue_type="Sub-task"` + `parent_key` for the latter) |
 | `edit_issue(issue_key, summary, description, labels, assignee_account_id, priority, components, confirm)` | Write (gated) | Update one or more fields on an existing issue or subtask |
+| `project_context(project)` | Read | Reference snapshot of a project: identity, `issue_types`, `statuses`/`statuses_by_issue_type`, `components`, instance `priorities`, assignable `users`, and a sample of `labels` in use -- meant to be fetched once and remembered by the caller rather than re-fetched every turn |
 
 Each tool is reachable both as a Python function (`tools/<name>.py`) and
 as a CLI subcommand (`scripts/jira_tool.py <name>`). See `skill.yaml` for

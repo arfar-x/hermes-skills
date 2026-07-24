@@ -587,3 +587,128 @@ def test_issue_to_dict_only_filters_but_keeps_key_url_custom_fields():
         "custom_fields": {"customfield_10056": "https://figma.com/x"},
         "summary": "Fix bug",
     }
+
+
+def test_project_context_requires_a_project(client):
+    with pytest.raises(JiraValidationError):
+        client.project_context()
+
+
+def _empty_project_context_responses(project_name="Payment Platform", lead="Alice"):
+    return [
+        make_response(json_data={"name": project_name, "lead": {"displayName": lead}}),
+        make_response(json_data=[]),  # statuses
+        make_response(json_data=[]),  # components
+        make_response(json_data=[]),  # priorities
+        make_response(json_data=[]),  # users (single short page)
+        make_response(json_data={"issues": [], "total": 0}),  # labels
+    ]
+
+
+def test_project_context_uses_default_project_from_config(jira_config, mock_session):
+    from dataclasses import replace
+
+    from lib.jira_client import JiraClient
+
+    configured_client = JiraClient(config=replace(jira_config, default_project="PAYKAN"), session=mock_session)
+    mock_session.request.side_effect = _empty_project_context_responses()
+    result = configured_client.project_context()
+    assert result["project"] == "PAYKAN"
+
+
+def test_project_context_builds_full_reference_snapshot(client, mock_session):
+    project_info_response = make_response(
+        json_data={"name": "Payment Platform", "lead": {"displayName": "Alice"}}
+    )
+    statuses_response = make_response(
+        json_data=[
+            {"name": "Story", "statuses": [{"name": "To Do"}, {"name": "In Progress"}]},
+            {"name": "Bug", "statuses": [{"name": "To Do"}, {"name": "Done"}]},
+        ]
+    )
+    components_response = make_response(
+        json_data=[{"name": "API"}, {"name": "Web"}]
+    )
+    priorities_response = make_response(
+        json_data=[{"name": "Highest"}, {"name": "High"}, {"name": "Low"}]
+    )
+    users_response = make_response(
+        json_data=[
+            {"accountId": "abc123", "displayName": "Alice", "emailAddress": "alice@example.com", "active": True},
+            {"accountId": "def456", "displayName": "Bob", "emailAddress": "bob@example.com", "active": True},
+        ]
+    )
+    labels_response = make_response(
+        json_data={
+            "issues": [
+                {"key": "PAY-1", "fields": {"labels": ["Frontend", "Backend"]}},
+                {"key": "PAY-2", "fields": {"labels": ["Frontend"]}},
+            ],
+            "total": 2,
+        }
+    )
+    mock_session.request.side_effect = [
+        project_info_response,
+        statuses_response,
+        components_response,
+        priorities_response,
+        users_response,
+        labels_response,
+    ]
+
+    result = client.project_context(project="PAYKAN")
+
+    assert result == {
+        "project": "PAYKAN",
+        "name": "Payment Platform",
+        "lead": "Alice",
+        "issue_types": ["Bug", "Story"],
+        "statuses": ["Done", "In Progress", "To Do"],
+        "statuses_by_issue_type": {
+            "Story": ["In Progress", "To Do"],
+            "Bug": ["Done", "To Do"],
+        },
+        "components": ["API", "Web"],
+        "priorities": ["Highest", "High", "Low"],
+        "users": [
+            {"account_id": "abc123", "display_name": "Alice", "email": "alice@example.com", "active": True},
+            {"account_id": "def456", "display_name": "Bob", "email": "bob@example.com", "active": True},
+        ],
+        "labels": ["Backend", "Frontend"],
+    }
+
+    calls = mock_session.request.call_args_list
+    assert calls[0].args[:2] == ("GET", "https://jira.example.com/rest/api/2/project/PAYKAN")
+    assert calls[1].args[:2] == ("GET", "https://jira.example.com/rest/api/2/project/PAYKAN/statuses")
+    assert calls[2].args[:2] == ("GET", "https://jira.example.com/rest/api/2/project/PAYKAN/components")
+    assert calls[3].args[:2] == ("GET", "https://jira.example.com/rest/api/2/priority")
+    users_method, users_url = calls[4].args[:2]
+    assert users_method == "GET"
+    assert users_url.endswith("/user/assignable/search")
+    assert calls[4].kwargs["params"]["project"] == "PAYKAN"
+    assert calls[5].args[0] == "POST"
+
+
+def test_project_context_paginates_users_instead_of_one_large_page(client, mock_session):
+    def fake_user(i):
+        return {"accountId": f"acc{i}", "displayName": f"User {i}", "emailAddress": f"u{i}@example.com", "active": True}
+
+    users_page1 = make_response(json_data=[fake_user(i) for i in range(50)])
+    users_page2 = make_response(json_data=[fake_user(i) for i in range(50, 60)])
+    mock_session.request.side_effect = [
+        make_response(json_data={"name": "Payment Platform", "lead": {"displayName": "Alice"}}),
+        make_response(json_data=[]),  # statuses
+        make_response(json_data=[]),  # components
+        make_response(json_data=[]),  # priorities
+        users_page1,
+        users_page2,
+        make_response(json_data={"issues": [], "total": 0}),  # labels
+    ]
+
+    result = client.project_context(project="PAYKAN")
+
+    assert len(result["users"]) == 60
+    assert mock_session.request.call_count == 7
+    # Each user page request asks for a bounded page, not one large page.
+    users_page1_call = mock_session.request.call_args_list[4]
+    assert users_page1_call.kwargs["params"]["maxResults"] == 50

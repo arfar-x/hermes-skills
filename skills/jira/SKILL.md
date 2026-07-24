@@ -135,14 +135,30 @@ python3 scripts/jira_tool.py <tool> [--flags...]
     `reporter`, `assignee`, `status`, `due`, `priority`, `labels`,
     `resolution`, `updated`, `created`. Never write a status literal
     (e.g. `status = 'Pending'`) into JQL unless you've actually seen
-    that exact status appear in a prior `my_work`/`search` result or the
-    user gave it to you -- a plausible-sounding guess doesn't error, it
-    just silently returns zero misleading results. If a query built this
-    way still returns nothing, don't silently swap in a different field
-    name and retry blind -- tell the user exactly what you searched
-    (state the JQL) and ask, or verify first (`list_fields` for custom
-    fields, one broader `search`/`my_work` call to see real status
-    names) rather than guessing your way through several variants.
+    that exact status appear in a prior `my_work`/`search` result, in
+    `project_context`'s `statuses`, or the user gave it to you -- a
+    plausible-sounding guess doesn't error, it just silently returns
+    zero misleading results. If a query built this way still returns
+    nothing, don't silently swap in a different field name and retry
+    blind -- tell the user exactly what you searched (state the JQL)
+    and ask, or verify first (`project_context` for statuses/labels/
+    users, `list_fields` for custom fields) rather than guessing your
+    way through several variants.
+12. **Remember a project's workflow instead of re-fetching it every
+    turn.** `project_context --project X` returns a project's real
+    `issue_types`, `statuses`, `components`, `priorities`, assignable
+    `users`, and a sample of `labels` in one call -- this is the
+    grounding source rule 11 refers to. Call it once per project; if
+    your runtime has a persistent-memory feature (something that
+    survives past this turn or this conversation), save the interesting
+    parts as project-scoped facts (e.g. "PAY statuses: To Do, In
+    Progress, Review, Done"; "PAY team: Alice, Bob, ...") so later turns
+    and sessions can consult that memory instead of calling
+    `project_context` again -- a project's workflow, team, and label
+    vocabulary don't change often. Use whatever you already know (freshly
+    fetched or remembered) to catch a likely typo or mismatched term in
+    what the user said (e.g. "pended" doesn't match any real status --
+    ask what they meant) instead of guessing blind.
 
 ## Commands
 
@@ -167,6 +183,12 @@ python3 scripts/jira_tool.py search --jql "assignee = currentUser() AND updated 
 
 # Enumerate every field (incl. custom fields) to discover a custom field's id by name
 python3 scripts/jira_tool.py list_fields
+
+# Reference snapshot of a project: issue types, workflow statuses (overall
+# and per issue type), components, instance priorities, assignable users,
+# and a sample of labels in use -- call once per project, remember the
+# result if you can (rule 12), don't re-fetch every turn
+python3 scripts/jira_tool.py project_context [--project PAY]
 
 # Look up a user by name/email fragment, to get an account_id for JQL
 # assignee filters or create_issue/edit_issue's --assignee_account_id.
@@ -288,8 +310,17 @@ guess a `customfield_NNNNN` id without confirming it via `list_fields`.
 **"Which tasks are ready for dev?"**
 This is almost always a status name, not a special tool -- run
 `search --jql "status = 'Ready for Dev'"` (confirm the exact status name
-against the project's workflow first if unsure, e.g. via one `my_work`
-or `search` call to see what statuses actually appear).
+against the project's workflow first if unsure -- check `project_context`'s
+`statuses` if you already have it for this project, otherwise fetch it,
+per rules 11-12).
+
+**"What statuses/labels does this project use?" / "Who's on this project?"**
+Run `project_context --project PAY` (falls back to `JIRA_DEFAULT_PROJECT`).
+Report `statuses`/`statuses_by_issue_type`, `labels` (note it's a sample
+from unresolved issues, not exhaustive -- say so if asked "all labels"),
+or `users` directly as fact. Remember the result per rule 12 rather than
+calling this again later in the same project unless you have reason to
+think it changed.
 
 **"Which task has no log that I should log?"**
 Run `search --jql "assignee = currentUser() AND resolution = Unresolved AND timespent is EMPTY"`.
@@ -315,10 +346,14 @@ for `triage` instead when the question is really about the Frontend/Backend
 subtask workflow across many stories.
 
 **"Find John's tasks that I reported, due tomorrow."** (ad hoc, no dedicated tool)
-Per rule 9, chain `search_users` + `search` rather than writing new code:
-run `search_users --query john` (add `--project` if a project is already
-known/relevant -- narrows the match and often resolves a common-name
-collision on its own). If the scoped search comes back with `count: 0`
+Per rule 9, chain `search_users` + `search` rather than writing new code --
+but check remembered/already-fetched `project_context` first (rule 12): if
+you already know this project's `users` and "John" unambiguously matches
+one, use that `account_id` directly and skip `search_users` entirely.
+Otherwise run `search_users --query john` (add `--project` if a project is
+already known/relevant -- narrows the match and often resolves a
+common-name collision on its own). If the scoped search comes back with
+`count: 0`
 (check the result's `project` field, not just what you passed, since
 `JIRA_DEFAULT_PROJECT` may have applied silently), don't conclude there's
 no such user -- ask the user whether to broaden to an instance-wide search

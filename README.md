@@ -34,7 +34,8 @@ skills/
 ├── jira-triage/           # Thin skill: group stories with their labeled subtasks for FE/BE/design triage
 ├── jira-search-users/     # Thin skill: look up a user's account_id by name/email
 ├── jira-create-issue/     # Thin skill: create a new issue or subtask (write, confirm-gated)
-└── jira-edit-issue/       # Thin skill: update fields on an existing issue or subtask (write, confirm-gated)
+├── jira-edit-issue/       # Thin skill: update fields on an existing issue or subtask (write, confirm-gated)
+└── jira-project-context/  # Thin skill: reference snapshot of a project's statuses/labels/users
 ```
 
 A future toolset (say, `backoffice`) would land the same way:
@@ -77,6 +78,7 @@ single place to see everything installable at a glance.
 | `jira-search-users` | [jira](skills/jira) | Read | Look up a user's account_id by name/email fragment |
 | `jira-create-issue` | [jira](skills/jira) | Write (gated) | Create a new issue or subtask |
 | `jira-edit-issue` | [jira](skills/jira) | Write (gated) | Update fields on an existing issue or subtask |
+| `jira-project-context` | [jira](skills/jira) | Read | Reference snapshot of a project: issue types, statuses, components, priorities, users, labels |
 
 ## Installation
 

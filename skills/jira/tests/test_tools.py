@@ -9,6 +9,7 @@ from tools import (
     issue_summary,
     list_fields,
     my_work,
+    project_context,
     search,
     search_users,
     sprint,
@@ -327,6 +328,30 @@ def test_triage_wraps_errors_as_json():
     mock_client.triage.side_effect = JiraValidationError("no project")
     with patch("tools.triage.get_client", return_value=mock_client):
         result = triage.triage()
+    assert "error" in result
+
+
+def test_project_context_delegates_to_client_and_returns_result():
+    mock_client = MagicMock()
+    mock_client.project_context.return_value = {
+        "project": "PAYKAN",
+        "statuses": ["To Do", "Done"],
+        "users": [],
+        "labels": [],
+    }
+    with patch("tools.project_context.get_client", return_value=mock_client):
+        result = project_context.project_context(project="PAYKAN")
+    assert result["project"] == "PAYKAN"
+    mock_client.project_context.assert_called_once_with(project="PAYKAN")
+
+
+def test_project_context_wraps_errors_as_json():
+    mock_client = MagicMock()
+    from lib.jira_client import JiraValidationError
+
+    mock_client.project_context.side_effect = JiraValidationError("no project")
+    with patch("tools.project_context.get_client", return_value=mock_client):
+        result = project_context.project_context()
     assert "error" in result
 
 

@@ -389,14 +389,22 @@ class JiraClient:
     ) -> List[Dict[str, Any]]:
         """Transparently walk paginated Jira endpoints and return all items.
 
-        Handles both the "startAt/maxResults/total" style (search, worklogs,
-        comments) and the "isLast" style (agile boards/sprints).
+        Handles the "startAt/maxResults/total" style (search, worklogs,
+        comments), the "isLast" style (agile boards/sprints), and endpoints
+        that return a bare JSON array with no pagination envelope at all
+        (e.g. ``/user/search``, ``/user/assignable/search``) -- for the
+        latter, a short page is the only available stop signal.
 
         ``method="POST"`` sends ``params`` as the JSON body instead of the
         query string -- Jira's ``/search`` endpoint supports this, and it
         avoids putting a JQL query in the URL, which some reverse
         proxies/WAFs in front of self-hosted Jira instances reject (403)
         even for otherwise-valid, correctly-authenticated requests.
+
+        Always requests one bounded page at a time (``page_size``, default
+        50) and walks forward via ``startAt`` rather than asking Jira for
+        every result in a single large page -- keeps each request small
+        and lets ``max_results_total`` cut the walk short cheaply.
         """
         collected: List[Dict[str, Any]] = []
         start_at = int(params.get("startAt", 0))
@@ -416,11 +424,17 @@ class JiraClient:
                 payload = self._request("POST", path, json_body=params)
             else:
                 payload = self._request("GET", path, params=params)
-            items = payload.get(items_key, payload) if items_key else payload.get("values", [])
+
+            if isinstance(payload, list):
+                items = payload
+            elif items_key:
+                items = payload.get(items_key, payload)
+            else:
+                items = payload.get("values", [])
             collected.extend(items)
 
-            total = payload.get("total")
-            is_last = payload.get("isLast")
+            total = payload.get("total") if isinstance(payload, dict) else None
+            is_last = payload.get("isLast") if isinstance(payload, dict) else None
             fetched_count = len(items)
 
             start_at += fetched_count
@@ -1027,6 +1041,105 @@ class JiraClient:
             "project": resolved_project,
             "issue_count": len(stories),
             "stories": stories,
+        }
+
+    def project_context(
+        self,
+        project: Optional[str] = None,
+        *,
+        max_users: int = 200,
+        max_label_scan: int = 200,
+    ) -> Dict[str, Any]:
+        """Return a compact reference snapshot of a project: its identity,
+        issue types, workflow statuses, components, instance priorities,
+        assignable users, and labels seen on its unresolved issues.
+
+        This is meant to be fetched once and then remembered by the caller
+        (via whatever persistent-memory mechanism its own runtime has, if
+        any) rather than re-fetched every turn -- a project's workflow,
+        team, and vocabulary don't change often. This method itself does
+        no caching of its own; every call hits Jira fresh. The user list
+        and label scan are walked in bounded pages (via ``_paginate``/
+        ``search``) rather than requested as one large page; the other
+        fields (issue types, statuses, components, priorities) come from
+        endpoints Jira itself returns unpaginated in full, since they're
+        inherently small, bounded reference lists, not bulk listings.
+
+        Args:
+            project: Project key. Falls back to ``JIRA_DEFAULT_PROJECT`` if
+                unset; raises if neither is available -- never guessed.
+            max_users: Safety cap on assignable users fetched, paginated in
+                pages of 50.
+            max_label_scan: Safety cap on how many unresolved issues to
+                scan for labels. Jira has no endpoint that lists "labels
+                used in project X" directly, so this is a bounded sample
+                of labels actually in use, not an exhaustive enumeration.
+
+        Returns:
+            ``{"project": ..., "name": ..., "lead": ..., "issue_types": [...],
+               "statuses": [...], "statuses_by_issue_type": {...},
+               "components": [...], "priorities": [...],
+               "users": [{"account_id", "display_name", "email", "active"}, ...],
+               "labels": [...]}``. ``priorities`` is instance-wide (Jira has
+            no per-project priority scheme in the common case), returned in
+            Jira's own configured order (highest first), not alphabetized.
+        """
+        resolved_project = self.resolve_project(project)
+        if not resolved_project:
+            raise JiraValidationError(
+                "No project given and JIRA_DEFAULT_PROJECT is not set. Pass an explicit "
+                "project key, e.g. determined from prior search results or by asking the user."
+            )
+
+        project_info = self._request("GET", f"{self.API_V2}/project/{resolved_project}", params={})
+
+        statuses_payload = self._request(
+            "GET", f"{self.API_V2}/project/{resolved_project}/statuses", params={}
+        )
+        statuses_by_issue_type: Dict[str, List[str]] = {}
+        for issue_type in statuses_payload or []:
+            type_name = issue_type.get("name")
+            if not type_name:
+                continue
+            statuses_by_issue_type[type_name] = sorted(
+                {s.get("name") for s in issue_type.get("statuses", []) or [] if s.get("name")}
+            )
+        statuses = sorted({name for names in statuses_by_issue_type.values() for name in names})
+
+        components_payload = self._request(
+            "GET", f"{self.API_V2}/project/{resolved_project}/components", params={}
+        )
+        components = sorted({c.get("name") for c in components_payload or [] if c.get("name")})
+
+        priorities_payload = self._request("GET", f"{self.API_V2}/priority", params={})
+        priorities = [p.get("name") for p in priorities_payload or [] if p.get("name")]
+
+        raw_users = self._paginate(
+            f"{self.API_V2}/user/assignable/search",
+            params={"project": resolved_project},
+            max_results_total=max_users,
+            page_size=50,
+        )
+        users = [self._build_user(raw).to_dict() for raw in raw_users]
+
+        label_issues = self.search(
+            f"project = {resolved_project} AND resolution = Unresolved",
+            fields=["labels"],
+            max_results=max_label_scan,
+        )
+        labels = sorted({label for issue in label_issues for label in issue.labels})
+
+        return {
+            "project": resolved_project,
+            "name": project_info.get("name"),
+            "lead": safe_get(project_info, "lead", "displayName"),
+            "issue_types": sorted(statuses_by_issue_type.keys()),
+            "statuses": statuses,
+            "statuses_by_issue_type": statuses_by_issue_type,
+            "components": components,
+            "priorities": priorities,
+            "users": users,
+            "labels": labels,
         }
 
     def list_fields(self) -> List[Dict[str, Any]]:

@@ -55,6 +55,7 @@ from tools import (  # noqa: E402
     issue_summary,
     list_fields,
     my_work,
+    project_context,
     search,
     search_users,
     sprint,
@@ -169,6 +170,16 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--max_results", type=int, default=200)
 
+    p = subparsers.add_parser(
+        "project_context",
+        help="Reference snapshot of a project: workflow statuses, assignable users, labels in use",
+    )
+    p.add_argument(
+        "--project",
+        default=None,
+        help="Jira project key, e.g. PAY. Falls back to JIRA_DEFAULT_PROJECT if omitted.",
+    )
+
     p = subparsers.add_parser("search_users", help="Look up users by name/email fragment")
     p.add_argument("--query", required=True, help='Name, username, or email fragment, e.g. "john"')
     p.add_argument(
@@ -266,6 +277,8 @@ def dispatch(args: argparse.Namespace):
         return triage.triage(
             project=args.project, parent_issue_types=parent_types, max_results=args.max_results
         )
+    if args.tool == "project_context":
+        return project_context.project_context(project=args.project)
     if args.tool == "search_users":
         return search_users.search_users(
             args.query, project=args.project, all_projects=args.all_projects, max_results=args.max_results
