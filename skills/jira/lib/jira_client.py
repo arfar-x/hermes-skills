@@ -55,6 +55,14 @@ DEFAULT_ISSUE_FIELDS = [
     "subtasks",
 ]
 
+#: A lighter field set for bulk/list-style calls (search()'s default). Omits
+#: "description" -- free text that can run to paragraphs per issue and is
+#: rarely needed to triage a list of many issues at once, unlike a single
+#: issue_summary/get_issue call where the per-call cost is fixed regardless
+#: of field verbosity. Everything else (links, subtasks, components) is
+#: kept since "blocked" detection and subtask-presence checks depend on it.
+COMPACT_ISSUE_FIELDS = [f for f in DEFAULT_ISSUE_FIELDS if f != "description"]
+
 #: Raw Jira field keys already surfaced as named Issue attributes. Any other
 #: key present in a response's ``fields`` (e.g. a custom field like "Figma
 #: Link", customfield_10056) is passed through into Issue.custom_fields
@@ -908,6 +916,120 @@ class JiraClient:
             {"id": f.get("id"), "name": f.get("name"), "custom": bool(f.get("custom"))}
             for f in payload or []
         ]
+
+    def create_issue(
+        self,
+        project: str,
+        summary: str,
+        issue_type: str,
+        *,
+        description: Optional[str] = None,
+        parent_key: Optional[str] = None,
+        labels: Optional[List[str]] = None,
+        assignee_account_id: Optional[str] = None,
+        priority: Optional[str] = None,
+        components: Optional[List[str]] = None,
+    ) -> Issue:
+        """Create a new issue -- a parent work item, or a subtask.
+
+        In this workflow PMs create parent issues (Story/Bug/Task/Epic) and
+        developers/designers create subtasks under them, so this single
+        method covers both: pass ``issue_type="Sub-task"`` and
+        ``parent_key`` to create a subtask instead of a separate method.
+
+        Args:
+            project: Project key, e.g. ``PAYKAN``.
+            summary: Issue title.
+            issue_type: e.g. ``"Story"``, ``"Bug"``, ``"Task"``, ``"Sub-task"``.
+            description: Plain-text description.
+            parent_key: Required when ``issue_type`` is ``"Sub-task"``.
+            labels: Labels to apply, e.g. ``["Frontend"]``.
+            assignee_account_id: A user's ``account_id`` (resolve a name to
+                this via ``search_users`` first -- never guessed from a
+                display name).
+            priority: Priority name, e.g. ``"High"``.
+            components: Component names.
+
+        Raises:
+            JiraValidationError: If required fields are missing, or
+                ``issue_type`` is ``"Sub-task"`` without ``parent_key``.
+        """
+        project = (project or "").strip()
+        if not project:
+            raise JiraValidationError("project is required.")
+        summary = (summary or "").strip()
+        if not summary:
+            raise JiraValidationError("summary is required.")
+        issue_type = (issue_type or "").strip()
+        if not issue_type:
+            raise JiraValidationError("issue_type is required.")
+        if issue_type.lower() == "sub-task" and not parent_key:
+            raise JiraValidationError("parent_key is required when issue_type is 'Sub-task'.")
+
+        fields: Dict[str, Any] = {
+            "project": {"key": project},
+            "summary": summary,
+            "issuetype": {"name": issue_type},
+        }
+        if description:
+            fields["description"] = description
+        if parent_key:
+            fields["parent"] = {"key": parent_key}
+        if labels:
+            fields["labels"] = list(labels)
+        if assignee_account_id:
+            fields["assignee"] = {"accountId": assignee_account_id}
+        if priority:
+            fields["priority"] = {"name": priority}
+        if components:
+            fields["components"] = [{"name": c} for c in components]
+
+        raw = self._request("POST", f"{self.API_V2}/issue", json_body={"fields": fields})
+        return self.get_issue(raw.get("key", ""))
+
+    def edit_issue(
+        self,
+        issue_key: str,
+        *,
+        summary: Optional[str] = None,
+        description: Optional[str] = None,
+        labels: Optional[List[str]] = None,
+        assignee_account_id: Optional[str] = None,
+        priority: Optional[str] = None,
+        components: Optional[List[str]] = None,
+    ) -> Issue:
+        """Update fields on an existing issue (or subtask). Only given fields change.
+
+        Args:
+            issue_key: Target issue, e.g. ``PAY-123``.
+            assignee_account_id: A user's ``account_id`` (resolve via
+                ``search_users`` first -- never guessed).
+
+        Raises:
+            JiraValidationError: If no field is given to update.
+        """
+        self._require_issue_key(issue_key)
+        fields: Dict[str, Any] = {}
+        if summary is not None:
+            fields["summary"] = summary
+        if description is not None:
+            fields["description"] = description
+        if labels is not None:
+            fields["labels"] = list(labels)
+        if assignee_account_id is not None:
+            fields["assignee"] = {"accountId": assignee_account_id}
+        if priority is not None:
+            fields["priority"] = {"name": priority}
+        if components is not None:
+            fields["components"] = [{"name": c} for c in components]
+        if not fields:
+            raise JiraValidationError(
+                "At least one of summary/description/labels/assignee_account_id/"
+                "priority/components must be provided."
+            )
+
+        self._request("PUT", f"{self.API_V2}/issue/{issue_key}", json_body={"fields": fields})
+        return self.get_issue(issue_key)
 
     # ------------------------------------------------------------------
     # Internal helpers

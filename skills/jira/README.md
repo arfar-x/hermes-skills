@@ -23,10 +23,15 @@ assume any particular agent runtime.
   unresolved "blocked by" links, flagged comments). `blockers()` and
   `my_work()` both use it, so they can never disagree.
 - **Write operations are gated.** `worklog()`, `worklog_edit()`,
-  `worklog_delete()`, and `transition()` refuse to execute unless
-  called with `confirm=true` (CLI: `--confirm`), or
-  `JIRA_AUTO_CONFIRM_WRITES=true` is set. This backs up `SKILL.md`'s
+  `worklog_delete()`, `transition()`, `create_issue()`, and `edit_issue()`
+  refuse to execute unless called with `confirm=true` (CLI: `--confirm`),
+  or `JIRA_AUTO_CONFIRM_WRITES=true` is set. This backs up `SKILL.md`'s
   confirmation rule with an enforced safety net in code.
+- **Bulk reads default to a compact field set.** `search()` omits each
+  issue's `description` unless called with `detailed=true` -- the field
+  most likely to be long free text, and the one least often needed to
+  scan many issues at once. Single-issue tools (`get_issue`,
+  `issue_summary`) always return everything.
 
 ## Project layout
 
@@ -47,10 +52,13 @@ skills/jira/
 │   ├── worklog_delete.py
 │   ├── transition.py
 │   ├── search.py
+│   ├── search_users.py
 │   ├── sprint.py
 │   ├── worklog_report.py
 │   ├── list_fields.py
-│   └── triage.py
+│   ├── triage.py
+│   ├── create_issue.py
+│   └── edit_issue.py
 ├── lib/                     # Shared implementation, not directly agent-facing
 │   ├── jira_client.py       # The single Jira REST client
 │   ├── auth.py              # Env-based configuration + validation
@@ -74,7 +82,7 @@ ever hard-coded.**
 | `JIRA_TIMEOUT_SECONDS` | No | `30` | Per-request timeout |
 | `JIRA_MAX_RETRIES` | No | `3` | Retries for `429`/`5xx` responses |
 | `JIRA_VERIFY_SSL` | No | `true` | Disable only for trusted self-signed internal instances |
-| `JIRA_AUTO_CONFIRM_WRITES` | No | `false` | Skip the confirmation gate for `worklog`/`transition` |
+| `JIRA_AUTO_CONFIRM_WRITES` | No | `false` | Skip the confirmation gate for `worklog`/`transition`/`create_issue`/`edit_issue` |
 | `JIRA_CACHE_TTL_SECONDS` | No | `0` | Optional TTL cache for idempotent GET requests; `0` disables caching |
 | `JIRA_DEFAULT_PROJECT` | No | -- | Project key (e.g. `PAYKAN`) used by `triage` when `--project` isn't given; if unset, the model must resolve/pass a project itself |
 
@@ -95,7 +103,8 @@ Jira Server/Data Center.
 | `my_work()` | Read | Unresolved issues assigned to the current user |
 | `issue_summary(issue_key)` | Read | Issue + comments + worklogs + changelog + links, as one document |
 | `blockers(issue_key)` | Read | `{"blocked": bool, "reasons": [...]}` from links/status/comments |
-| `search(jql, fields)` | Read | Arbitrary JQL, structured issue results (incl. description/components/subtasks/custom fields) |
+| `search(jql, fields, detailed)` | Read | Arbitrary JQL, structured issue results (incl. components/subtasks/custom fields; `description` only when `detailed=true`) |
+| `search_users(query, max_results)` | Read | Look up users by name/email fragment, to resolve an `account_id` for assignee filters/fields |
 | `transition(issue_key, status, confirm)` | Write (gated) | Move an issue to a status; transition IDs resolved automatically |
 | `worklog(issue_key, duration, description, date, confirm)` | Write (gated) | Log time against an issue, optionally backdated |
 | `worklog_edit(issue_key, worklog_id, duration, description, date, confirm)` | Write (gated) | Update an existing worklog's duration/description/date |
@@ -104,6 +113,8 @@ Jira Server/Data Center.
 | `worklog_report(since, until, max_issues)` | Read | Aggregate your logged time over a date range vs. each issue's estimate |
 | `list_fields()` | Read | Enumerate every field (incl. custom fields) to discover a custom field's id by name |
 | `triage(project, parent_issue_types, max_results)` | Read | Group unresolved parent issues (Story/Bug/Task) with their labeled subtasks, for frontend/backend/design-readiness triage |
+| `create_issue(project, summary, issue_type, description, parent_key, labels, assignee_account_id, priority, components, confirm)` | Write (gated) | Create a new issue or subtask (pass `issue_type="Sub-task"` + `parent_key` for the latter) |
+| `edit_issue(issue_key, summary, description, labels, assignee_account_id, priority, components, confirm)` | Write (gated) | Update one or more fields on an existing issue or subtask |
 
 Each tool is reachable both as a Python function (`tools/<name>.py`) and
 as a CLI subcommand (`scripts/jira_tool.py <name>`). See `skill.yaml` for

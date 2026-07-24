@@ -31,7 +31,10 @@ skills/
 ├── jira-list-fields/      # Thin skill: enumerate fields to discover a custom field's id
 ├── jira-worklog-edit/     # Thin skill: fix a worklog's duration/description/date (write, confirm-gated)
 ├── jira-worklog-delete/   # Thin skill: permanently delete a worklog (write, confirm-gated)
-└── jira-triage/           # Thin skill: group stories with their labeled subtasks for FE/BE/design triage
+├── jira-triage/           # Thin skill: group stories with their labeled subtasks for FE/BE/design triage
+├── jira-search-users/     # Thin skill: look up a user's account_id by name/email
+├── jira-create-issue/     # Thin skill: create a new issue or subtask (write, confirm-gated)
+└── jira-edit-issue/       # Thin skill: update fields on an existing issue or subtask (write, confirm-gated)
 ```
 
 A future toolset (say, `backoffice`) would land the same way:
@@ -60,7 +63,7 @@ single place to see everything installable at a glance.
 |---|---|---|---|
 | `jira` | [jira](skills/jira) | Read + Write | Do-everything Jira assistant (all actions below, one skill) |
 | `jira-my-work` | [jira](skills/jira) | Read | Unresolved issues assigned to the current user |
-| `jira-issues` | [jira](skills/jira) | Read | Arbitrary JQL search (incl. description/components/subtasks/custom fields) |
+| `jira-issues` | [jira](skills/jira) | Read | Arbitrary JQL search (incl. components/subtasks/custom fields; description on request) |
 | `jira-issue-summary` | [jira](skills/jira) | Read | Full context for one issue (fields, comments, worklogs, changelog, links) |
 | `jira-blockers` | [jira](skills/jira) | Read | Blocking status + reasons for one issue |
 | `jira-sprint` | [jira](skills/jira) | Read | Active sprint, board, dates, goal |
@@ -71,6 +74,9 @@ single place to see everything installable at a glance.
 | `jira-worklog-edit` | [jira](skills/jira) | Write (gated) | Update an existing worklog's duration/description/date |
 | `jira-worklog-delete` | [jira](skills/jira) | Write (gated) | Permanently delete a worklog entry |
 | `jira-triage` | [jira](skills/jira) | Read | Group unresolved stories/bugs/tasks with their labeled subtasks, for frontend/backend/design-readiness triage |
+| `jira-search-users` | [jira](skills/jira) | Read | Look up a user's account_id by name/email fragment |
+| `jira-create-issue` | [jira](skills/jira) | Write (gated) | Create a new issue or subtask |
+| `jira-edit-issue` | [jira](skills/jira) | Write (gated) | Update fields on an existing issue or subtask |
 
 ## Installation
 
@@ -183,8 +189,9 @@ Installation), invoke it:
 
 Every toolset documents its own read vs. write actions and any
 confirmation gating in its own `README.md` -- e.g. `skills/jira/README.md`
-lists `my_work`, `issue_summary`, `blockers`, `search`, `sprint` (read),
-and `worklog`, `transition` (write, refuse to run without `--confirm` or
+lists `my_work`, `issue_summary`, `blockers`, `search`, `search_users`,
+`sprint` (read), and `worklog`, `transition`, `create_issue`, `edit_issue`
+(write, refuse to run without `--confirm` or
 `JIRA_AUTO_CONFIRM_WRITES=true`). Check that file before relying on a
 new toolset's write actions.
 

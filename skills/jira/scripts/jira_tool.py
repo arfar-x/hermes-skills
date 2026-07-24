@@ -11,7 +11,7 @@ Usage:
     python scripts/jira_tool.py my_work
     python scripts/jira_tool.py issue_summary --issue_key PAY-123
     python scripts/jira_tool.py blockers --issue_key PAY-123
-    python scripts/jira_tool.py search --jql "assignee = currentUser()"
+    python scripts/jira_tool.py search --jql "assignee = currentUser()" [--detailed]
     python scripts/jira_tool.py worklog --issue_key PAY-123 --duration 2h \\
         --description "implementing validation" [--date 2026-07-20] [--confirm]
     python scripts/jira_tool.py transition --issue_key PAY-123 --status Review [--confirm]
@@ -22,6 +22,14 @@ Usage:
         [--duration 2h] [--description "..."] [--date 2026-07-20] [--confirm]
     python scripts/jira_tool.py worklog_delete --issue_key PAY-123 --worklog_id 28459 [--confirm]
     python scripts/jira_tool.py triage [--project PAYKAN] [--parent_issue_types Story,Bug,Task]
+    python scripts/jira_tool.py search_users --query john
+    python scripts/jira_tool.py create_issue --project PAYKAN --summary "..." \\
+        --issue_type Story [--description "..."] [--parent_key PAYKAN-100] \\
+        [--labels Frontend,UX] [--assignee_account_id ...] [--priority High] \\
+        [--components API] [--confirm]
+    python scripts/jira_tool.py edit_issue --issue_key PAYKAN-123 \\
+        [--summary "..."] [--description "..."] [--labels Frontend] \\
+        [--assignee_account_id ...] [--priority High] [--components API] [--confirm]
 
 Every subcommand prints JSON only (never prose) and always exits 0 on a
 handled error -- failures are reported as {"error": {...}} in the JSON
@@ -42,10 +50,13 @@ if _SKILL_ROOT not in sys.path:
 
 from tools import (  # noqa: E402
     blockers,
+    create_issue,
+    edit_issue,
     issue_summary,
     list_fields,
     my_work,
     search,
+    search_users,
     sprint,
     transition,
     triage,
@@ -83,6 +94,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Comma-separated extra field IDs to request (e.g. from list_fields), "
         "in addition to the default set",
+    )
+    p.add_argument(
+        "--detailed",
+        action="store_true",
+        help="Include each issue's description (omitted by default to save tokens on bulk results)",
     )
 
     p = subparsers.add_parser("transition", help="Move an issue to a new status (write, gated)")
@@ -143,6 +159,48 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--max_results", type=int, default=200)
 
+    p = subparsers.add_parser("search_users", help="Look up users by name/email fragment")
+    p.add_argument("--query", required=True, help='Name, username, or email fragment, e.g. "john"')
+    p.add_argument("--max_results", type=int, default=25)
+
+    p = subparsers.add_parser(
+        "create_issue", help="Create a new issue or subtask (write, gated)"
+    )
+    p.add_argument("--project", required=True, help="Project key, e.g. PAYKAN")
+    p.add_argument("--summary", required=True)
+    p.add_argument(
+        "--issue_type", required=True, help='e.g. "Story", "Bug", "Task", "Sub-task"'
+    )
+    p.add_argument("--description", default=None)
+    p.add_argument(
+        "--parent_key", default=None, help='Required when --issue_type is "Sub-task"'
+    )
+    p.add_argument("--labels", default=None, help="Comma-separated labels, e.g. Frontend,UX")
+    p.add_argument(
+        "--assignee_account_id",
+        default=None,
+        help="A user's account_id -- resolve via search_users first, don't guess",
+    )
+    p.add_argument("--priority", default=None, help='e.g. "High"')
+    p.add_argument("--components", default=None, help="Comma-separated component names")
+    p.add_argument("--confirm", action="store_true", help="Only pass after the user has explicitly confirmed")
+
+    p = subparsers.add_parser(
+        "edit_issue", help="Update fields on an existing issue or subtask (write, gated)"
+    )
+    _add_common(p, issue_key=True)
+    p.add_argument("--summary", default=None, help="New title (omit to leave unchanged)")
+    p.add_argument("--description", default=None, help="New description (omit to leave unchanged)")
+    p.add_argument("--labels", default=None, help="Comma-separated labels, replaces the existing list")
+    p.add_argument(
+        "--assignee_account_id",
+        default=None,
+        help="A user's account_id -- resolve via search_users first, don't guess",
+    )
+    p.add_argument("--priority", default=None, help='New priority name, e.g. "High"')
+    p.add_argument("--components", default=None, help="Comma-separated component names, replaces the existing list")
+    p.add_argument("--confirm", action="store_true", help="Only pass after the user has explicitly confirmed")
+
     return parser
 
 
@@ -155,7 +213,9 @@ def dispatch(args: argparse.Namespace):
         return blockers.blockers(args.issue_key)
     if args.tool == "search":
         extra_fields = args.fields.split(",") if args.fields else None
-        return search.search(args.jql, max_results=args.max_results, fields=extra_fields)
+        return search.search(
+            args.jql, max_results=args.max_results, fields=extra_fields, detailed=args.detailed
+        )
     if args.tool == "transition":
         return transition.transition(args.issue_key, args.status, confirm=args.confirm)
     if args.tool == "worklog":
@@ -183,6 +243,36 @@ def dispatch(args: argparse.Namespace):
         parent_types = args.parent_issue_types.split(",") if args.parent_issue_types else None
         return triage.triage(
             project=args.project, parent_issue_types=parent_types, max_results=args.max_results
+        )
+    if args.tool == "search_users":
+        return search_users.search_users(args.query, max_results=args.max_results)
+    if args.tool == "create_issue":
+        labels = args.labels.split(",") if args.labels else None
+        components = args.components.split(",") if args.components else None
+        return create_issue.create_issue(
+            args.project,
+            args.summary,
+            args.issue_type,
+            description=args.description,
+            parent_key=args.parent_key,
+            labels=labels,
+            assignee_account_id=args.assignee_account_id,
+            priority=args.priority,
+            components=components,
+            confirm=args.confirm,
+        )
+    if args.tool == "edit_issue":
+        labels = args.labels.split(",") if args.labels else None
+        components = args.components.split(",") if args.components else None
+        return edit_issue.edit_issue(
+            args.issue_key,
+            summary=args.summary,
+            description=args.description,
+            labels=labels,
+            assignee_account_id=args.assignee_account_id,
+            priority=args.priority,
+            components=components,
+            confirm=args.confirm,
         )
     raise AssertionError(f"Unhandled tool: {args.tool}")  # unreachable: argparse enforces choices
 

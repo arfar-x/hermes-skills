@@ -365,3 +365,96 @@ def test_triage_groups_subtasks_by_parent_and_flags_labels(client, mock_session)
     assert story_200["subtasks"] == []
     assert story_200["has_frontend_subtask"] is False
     assert story_200["has_backend_subtask"] is False
+
+
+def test_search_users_maps_display_name_email_and_active(client, mock_session):
+    mock_session.request.return_value = make_response(
+        json_data=[
+            {"accountId": "abc123", "displayName": "John Smith", "emailAddress": "john@example.com", "active": True}
+        ]
+    )
+    users = client.search_users("john")
+    assert users[0].account_id == "abc123"
+    assert users[0].display_name == "John Smith"
+
+
+def test_create_issue_requires_project_summary_and_type(client):
+    with pytest.raises(JiraValidationError):
+        client.create_issue("", "Fix bug", "Bug")
+    with pytest.raises(JiraValidationError):
+        client.create_issue("PAYKAN", "", "Bug")
+    with pytest.raises(JiraValidationError):
+        client.create_issue("PAYKAN", "Fix bug", "")
+
+
+def test_create_issue_subtask_requires_parent_key(client):
+    with pytest.raises(JiraValidationError, match="parent_key"):
+        client.create_issue("PAYKAN", "Build UI", "Sub-task")
+
+
+def test_create_issue_builds_request_body_and_refetches(client, mock_session):
+    create_response = make_response(status_code=201, json_data={"key": "PAYKAN-500"})
+    get_response = make_response(
+        json_data={"key": "PAYKAN-500", "fields": {"summary": "Build UI", "status": {"name": "To Do"}}}
+    )
+    mock_session.request.side_effect = [create_response, get_response]
+
+    issue = client.create_issue(
+        "PAYKAN",
+        "Build UI",
+        "Sub-task",
+        description="Needs a modal",
+        parent_key="PAYKAN-100",
+        labels=["Frontend"],
+        assignee_account_id="abc123",
+        priority="High",
+        components=["Web"],
+    )
+
+    assert issue.key == "PAYKAN-500"
+    post_call = mock_session.request.call_args_list[0]
+    method, url = post_call.args[:2]
+    assert method == "POST"
+    assert url.endswith("/issue")
+    body = post_call.kwargs["json"]["fields"]
+    assert body == {
+        "project": {"key": "PAYKAN"},
+        "summary": "Build UI",
+        "issuetype": {"name": "Sub-task"},
+        "description": "Needs a modal",
+        "parent": {"key": "PAYKAN-100"},
+        "labels": ["Frontend"],
+        "assignee": {"accountId": "abc123"},
+        "priority": {"name": "High"},
+        "components": [{"name": "Web"}],
+    }
+
+
+def test_edit_issue_rejects_when_no_fields_given(client):
+    with pytest.raises(JiraValidationError):
+        client.edit_issue("PAYKAN-1")
+
+
+def test_edit_issue_sends_only_provided_fields_and_refetches(client, mock_session):
+    put_response = make_response(status_code=204)
+    get_response = make_response(
+        json_data={"key": "PAYKAN-1", "fields": {"summary": "New title", "status": {"name": "To Do"}}}
+    )
+    mock_session.request.side_effect = [put_response, get_response]
+
+    issue = client.edit_issue("PAYKAN-1", summary="New title")
+
+    assert issue.summary == "New title"
+    put_call = mock_session.request.call_args_list[0]
+    method, url = put_call.args[:2]
+    assert method == "PUT"
+    assert url.endswith("/issue/PAYKAN-1")
+    assert put_call.kwargs["json"] == {"fields": {"summary": "New title"}}
+
+
+def test_search_compact_fields_omit_description():
+    from lib.jira_client import COMPACT_ISSUE_FIELDS, DEFAULT_ISSUE_FIELDS
+
+    assert "description" not in COMPACT_ISSUE_FIELDS
+    assert "description" in DEFAULT_ISSUE_FIELDS
+    assert set(COMPACT_ISSUE_FIELDS) == set(DEFAULT_ISSUE_FIELDS) - {"description"}

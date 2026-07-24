@@ -4,10 +4,13 @@ from lib.auth import JiraConfig
 from lib.models import Comment, Issue, IssueLink, Sprint, User, Worklog
 from tools import (
     blockers,
+    create_issue,
+    edit_issue,
     issue_summary,
     list_fields,
     my_work,
     search,
+    search_users,
     sprint,
     transition,
     triage,
@@ -122,6 +125,109 @@ def test_search_requests_default_fields_plus_extra():
     _, kwargs = mock_client.search.call_args
     assert "customfield_10056" in kwargs["fields"]
     assert "summary" in kwargs["fields"]  # a default field is still requested
+
+
+def test_search_omits_description_by_default():
+    mock_client = MagicMock()
+    issue = _issue()
+    object.__setattr__(issue, "description", "a very long description")
+    mock_client.search.return_value = [issue]
+    with patch("tools.search.get_client", return_value=mock_client):
+        result = search.search("project = PAY")
+    assert "description" not in result["issues"][0]
+    _, kwargs = mock_client.search.call_args
+    assert "description" not in kwargs["fields"]
+
+
+def test_search_includes_description_when_detailed():
+    mock_client = MagicMock()
+    issue = _issue()
+    object.__setattr__(issue, "description", "a very long description")
+    mock_client.search.return_value = [issue]
+    with patch("tools.search.get_client", return_value=mock_client):
+        result = search.search("project = PAY", detailed=True)
+    assert result["issues"][0]["description"] == "a very long description"
+    _, kwargs = mock_client.search.call_args
+    assert "description" in kwargs["fields"]
+
+
+def test_search_users_returns_query_count_and_users():
+    mock_client = MagicMock()
+    mock_client.search_users.return_value = [User(account_id="abc123", display_name="John Smith")]
+    with patch("tools.search_users.get_client", return_value=mock_client):
+        result = search_users.search_users("john")
+    assert result["count"] == 1
+    assert result["users"][0]["account_id"] == "abc123"
+
+
+def test_search_users_rejects_empty_query():
+    result = search_users.search_users("")
+    assert result["error"]["type"] == "invalid_input"
+
+
+def test_create_issue_requires_confirmation_by_default():
+    mock_client = MagicMock()
+    mock_client.config = _fake_config(auto_confirm=False)
+    with patch("tools.create_issue.get_client", return_value=mock_client):
+        result = create_issue.create_issue("PAYKAN", "Fix bug", "Bug")
+    assert result["confirmed"] is False
+    assert result["requires_confirmation"] is True
+    mock_client.create_issue.assert_not_called()
+
+
+def test_create_issue_executes_when_confirmed():
+    mock_client = MagicMock()
+    mock_client.config = _fake_config(auto_confirm=False)
+    mock_client.create_issue.return_value = _issue(key="PAYKAN-500")
+    with patch("tools.create_issue.get_client", return_value=mock_client):
+        result = create_issue.create_issue("PAYKAN", "Fix bug", "Bug", confirm=True)
+    assert result["confirmed"] is True
+    assert result["issue"]["key"] == "PAYKAN-500"
+    mock_client.create_issue.assert_called_once_with(
+        "PAYKAN",
+        "Fix bug",
+        "Bug",
+        description=None,
+        parent_key=None,
+        labels=None,
+        assignee_account_id=None,
+        priority=None,
+        components=None,
+    )
+
+
+def test_create_issue_rejects_missing_required_fields():
+    result = create_issue.create_issue("", "Fix bug", "Bug")
+    assert result["error"]["type"] == "invalid_input"
+
+
+def test_edit_issue_requires_confirmation_by_default():
+    mock_client = MagicMock()
+    mock_client.config = _fake_config(auto_confirm=False)
+    with patch("tools.edit_issue.get_client", return_value=mock_client):
+        result = edit_issue.edit_issue("PAYKAN-1", summary="New title")
+    assert result["confirmed"] is False
+    assert result["requires_confirmation"] is True
+    mock_client.edit_issue.assert_not_called()
+
+
+def test_edit_issue_executes_when_confirmed():
+    mock_client = MagicMock()
+    mock_client.config = _fake_config(auto_confirm=False)
+    mock_client.edit_issue.return_value = _issue(key="PAYKAN-1")
+    with patch("tools.edit_issue.get_client", return_value=mock_client):
+        result = edit_issue.edit_issue("PAYKAN-1", summary="New title", confirm=True)
+    assert result["confirmed"] is True
+    assert result["issue"]["key"] == "PAYKAN-1"
+
+
+def test_edit_issue_rejects_when_no_fields_given():
+    mock_client = MagicMock()
+    mock_client.config = _fake_config(auto_confirm=True)
+    with patch("tools.edit_issue.get_client", return_value=mock_client):
+        result = edit_issue.edit_issue("PAYKAN-1")
+    assert result["error"]["type"] == "invalid_input"
+    mock_client.edit_issue.assert_not_called()
 
 
 def test_list_fields_returns_client_result():

@@ -24,7 +24,7 @@ required_environment_variables:
     prompt: "Jira password"
     required_for: all functionality
   - name: JIRA_AUTO_CONFIRM_WRITES
-    prompt: "Skip the confirm step before logging work / transitioning tickets? (true/false)"
+    prompt: "Skip the confirm step before logging work / transitioning / creating / editing tickets? (true/false)"
     required_for: optional, defaults to false (asks before every write)
   - name: JIRA_DEFAULT_PROJECT
     prompt: "Default Jira project key for triage (e.g. PAY), if you always triage the same project"
@@ -69,9 +69,9 @@ python3 scripts/jira_tool.py <tool> [--flags...]
 4. **Never guess ticket status.** Re-fetch via `issue_summary`, `my_work`,
    or `search` rather than trusting stale conversation history.
 5. **Write operations require confirmation.** `transition`, `worklog`,
-   `worklog_edit`, and `worklog_delete` refuse to execute unless run
-   with `--confirm` (this is enforced in code, not just prompted).
-   Unless `JIRA_AUTO_CONFIRM_WRITES=true` is set:
+   `worklog_edit`, `worklog_delete`, `create_issue`, and `edit_issue`
+   refuse to execute unless run with `--confirm` (this is enforced in
+   code, not just prompted). Unless `JIRA_AUTO_CONFIRM_WRITES=true` is set:
    - State exactly what you're about to do -- **including the date**
      for `worklog` if it isn't today -- and wait for the user's explicit
      yes.
@@ -88,6 +88,10 @@ python3 scripts/jira_tool.py <tool> [--flags...]
    - `worklog_delete` is destructive and irreversible -- confirm which
      specific entry (issue, duration, date, description if known)
      before deleting, don't just confirm "delete a worklog".
+   - `create_issue`/`edit_issue` never invent an `--assignee_account_id`
+     from a display name -- resolve it via `search_users` first (see
+     rule 9), and ask the user if `search_users` returns more than one
+     match.
 6. **Chain tool calls when needed.** E.g. "what should I work on next,
    and is anything blocking it?" = `my_work` first, then `blockers` on
    the top candidate(s).
@@ -101,6 +105,15 @@ python3 scripts/jira_tool.py <tool> [--flags...]
    `url`, e.g. `[PAY-123](https://jira.example.com/browse/PAY-123)`, instead
    of a bare key. Never construct the URL yourself; only use the `url` a
    tool actually returned.
+9. **Never write ad-hoc code to talk to Jira.** Every intention this skill
+   needs to serve should be reachable by chaining the tools above --
+   `search`'s free-form `--jql` plus `search_users` for resolving a
+   person's name is the intended escape hatch for requests that don't map
+   to a single tool 1:1 (e.g. "find John's tasks that I reported, due
+   tomorrow"). Resolve names via `search_users`, resolve relative dates
+   yourself, then build the JQL and call `search` -- don't write and run a
+   new Python script against the Jira REST API to accomplish the same
+   thing.
 
 ## Commands
 
@@ -114,11 +127,18 @@ python3 scripts/jira_tool.py issue_summary --issue_key PAY-123
 # Blocking status + reasons for one issue
 python3 scripts/jira_tool.py blockers --issue_key PAY-123
 
-# Arbitrary JQL search (each issue includes description, components, subtasks)
-python3 scripts/jira_tool.py search --jql "assignee = currentUser() AND updated <= -14d" [--fields customfield_10056]
+# Arbitrary JQL search. Omits each issue's description by default to save
+# tokens on bulk results -- pass --detailed to include it (still always
+# includes components/subtasks/links)
+python3 scripts/jira_tool.py search --jql "assignee = currentUser() AND updated <= -14d" \
+  [--fields customfield_10056] [--detailed]
 
 # Enumerate every field (incl. custom fields) to discover a custom field's id by name
 python3 scripts/jira_tool.py list_fields
+
+# Look up a user by name/email fragment, to get an account_id for JQL
+# assignee filters or create_issue/edit_issue's --assignee_account_id
+python3 scripts/jira_tool.py search_users --query john
 
 # Active sprint / board / dates / goal
 python3 scripts/jira_tool.py sprint
@@ -148,6 +168,17 @@ python3 scripts/jira_tool.py worklog_delete --issue_key PAY-123 --worklog_id 284
 # frontend/backend/design-readiness triage -- --project falls back to
 # JIRA_DEFAULT_PROJECT if omitted
 python3 scripts/jira_tool.py triage [--project PAY] [--parent_issue_types Story,Bug,Task]
+
+# Create a new issue or subtask (write, gated -- see rule 5); pass
+# --issue_type Sub-task and --parent_key for a subtask, same tool either way
+python3 scripts/jira_tool.py create_issue --project PAY --summary "Fix checkout crash" \
+  --issue_type Bug [--description "..."] [--parent_key PAY-100] [--labels Frontend,UX] \
+  [--assignee_account_id ...] [--priority High] [--components API] --confirm
+
+# Update fields on an existing issue or subtask (write, gated -- see rule 5)
+python3 scripts/jira_tool.py edit_issue --issue_key PAY-123 \
+  [--summary "..."] [--description "..."] [--labels Frontend] \
+  [--assignee_account_id ...] [--priority High] [--components API] --confirm
 ```
 
 ## Examples
@@ -243,14 +274,33 @@ caveat an inferred verdict as inferred, never state it as fact the way
 
 **"Based on the description, which tasks need backend or frontend?" (ad hoc, no subtask structure yet)**
 If the user just wants a one-off read of a few issues rather than a full
-triage sweep, `search` (or `issue_summary` per issue) and read
-`description`/`components` yourself is fine -- reach for `triage` instead
-when the question is really about the Frontend/Backend subtask workflow
-across many stories.
+triage sweep, `search --detailed` (to get `description` back -- omitted by
+default, see rule below) or `issue_summary` per issue is fine -- reach for
+`triage` instead when the question is really about the Frontend/Backend
+subtask workflow across many stories.
+
+**"Find John's tasks that I reported, due tomorrow."** (ad hoc, no dedicated tool)
+Per rule 9, chain `search_users` + `search` rather than writing new code:
+run `search_users --query john` (ask the user to disambiguate if more than
+one match), resolve "tomorrow" to an actual calendar date yourself, then
+run `search --jql "assignee = <account_id> AND reporter = currentUser() AND due = <date>"`.
+
+**"Create a bug for the checkout crash."**
+Confirm the project, summary, and issue type with the user, then run
+`create_issue --project PAY --summary "Checkout crash" --issue_type Bug --confirm`.
+
+**"Add a frontend subtask under PAY-100 for the checkout UI."**
+Same tool as above, scoped to a subtask: confirm with the user, then run
+`create_issue --project PAY --summary "Checkout UI" --issue_type Sub-task --parent_key PAY-100 --labels Frontend --confirm`.
+
+**"Reassign PAY-123 to John."**
+Resolve John to an `account_id` via `search_users` first (ask if there's
+more than one match), confirm with the user, then run
+`edit_issue --issue_key PAY-123 --assignee_account_id <account_id> --confirm`.
 
 ## Reference
 
 See `README.md` in this skill directory for architecture details, the
 full environment-variable table, and how to run the test suite
-(`pytest`, 100 tests covering the client, config validation, and every
-tool's success/error/confirmation paths).
+(`pytest`, covering the client, config validation, and every tool's
+success/error/confirmation paths).
