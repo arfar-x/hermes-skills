@@ -105,15 +105,23 @@ python3 scripts/jira_tool.py <tool> [--flags...]
    `url`, e.g. `[PAY-123](https://jira.example.com/browse/PAY-123)`, instead
    of a bare key. Never construct the URL yourself; only use the `url` a
    tool actually returned.
-9. **Never write ad-hoc code to talk to Jira.** Every intention this skill
-   needs to serve should be reachable by chaining the tools above --
-   `search`'s free-form `--jql` plus `search_users` for resolving a
-   person's name is the intended escape hatch for requests that don't map
-   to a single tool 1:1 (e.g. "find John's tasks that I reported, due
-   tomorrow"). Resolve names via `search_users`, resolve relative dates
-   yourself, then build the JQL and call `search` -- don't write and run a
-   new Python script against the Jira REST API to accomplish the same
-   thing.
+9. **Never write ad-hoc code -- neither to talk to Jira, nor to
+   post-process a tool's output.** Every intention this skill needs to
+   serve should be reachable by chaining the tools above -- `search`'s
+   free-form `--jql` plus `search_users` for resolving a person's name is
+   the intended escape hatch for requests that don't map to a single tool
+   1:1 (e.g. "find John's tasks that I reported, due tomorrow"). Resolve
+   names via `search_users`, resolve relative dates yourself, then build
+   the JQL and call `search` -- don't write and run a new Python script
+   against the Jira REST API to accomplish the same thing. This also
+   covers sorting/filtering/picking-the-max out of a tool's own JSON
+   result (e.g. "what's the last task I worked on"): use `--order_by`/
+   `--max_results`/`--only` (`my_work`, `search`) to get exactly the
+   answer back, or reason over the JSON yourself -- don't pipe a tool's
+   output into a second interpreter (`python3 -c ...`, `jq`, etc.) to
+   compute it. Besides being unnecessary, piping tool output straight
+   into another interpreter is exactly the kind of command a security
+   scanner (Hermes' included) will flag and block for approval.
 10. **Ask for only the fields you need.** `search`'s `--only` and
     `issue_summary`'s `--sections` let you name exactly what to fetch and
     get back, instead of everything. Default to the tool's default set for
@@ -163,8 +171,12 @@ python3 scripts/jira_tool.py <tool> [--flags...]
 ## Commands
 
 ```bash
-# Unresolved issues assigned to the current user
-python3 scripts/jira_tool.py my_work
+# Unresolved issues assigned to the current user. --order_by is a JQL
+# ORDER BY clause (default: "priority DESC, updated DESC"); --max_results
+# caps how many come back. Use these instead of fetching everything and
+# post-processing yourself -- e.g. "what's the last task I worked on" is
+# --order_by "updated DESC" --max_results 1, not a second script.
+python3 scripts/jira_tool.py my_work [--order_by "updated DESC"] [--max_results 1]
 
 # Full context for one issue: fields, comments, worklogs, changelog, links.
 # --sections limits which parts to fetch/return (default: all)
@@ -244,6 +256,11 @@ python3 scripts/jira_tool.py edit_issue --issue_key PAY-123 \
 Run `my_work`. Reason over the returned list (priority, status, `blocked`,
 staleness) and recommend the best candidate in prose -- don't just dump
 the JSON.
+
+**"What's the last task I worked on?"**
+Run `my_work --order_by "updated DESC" --max_results 1` -- it comes back
+sorted with exactly the one issue you need, no further sorting or
+scripting required (rule 9). Report that issue's key/summary/status.
 
 **"What's blocking PAY-412?"**
 Run `blockers --issue_key PAY-412`. If `blocked: true`, summarize
