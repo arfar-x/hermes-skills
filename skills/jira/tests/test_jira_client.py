@@ -712,3 +712,63 @@ def test_project_context_paginates_users_instead_of_one_large_page(client, mock_
     # Each user page request asks for a bounded page, not one large page.
     users_page1_call = mock_session.request.call_args_list[4]
     assert users_page1_call.kwargs["params"]["maxResults"] == 50
+
+
+def test_current_board_scopes_lookup_to_resolved_project(client, mock_session):
+    mock_session.request.return_value = make_response(
+        json_data={"values": [{"id": 4, "name": "DATKAN board", "type": "kanban"}]}
+    )
+    board = client.current_board(project="DATKAN")
+    assert board.id == 4
+    assert board.type == "kanban"
+    _, kwargs = mock_session.request.call_args
+    assert kwargs["params"]["projectKeyOrId"] == "DATKAN"
+
+
+def test_current_board_falls_back_to_default_project_from_config(jira_config, mock_session):
+    from dataclasses import replace
+
+    from lib.jira_client import JiraClient
+
+    config = replace(jira_config, default_project="DATKAN")
+    client = JiraClient(config=config, session=mock_session)
+    mock_session.request.return_value = make_response(
+        json_data={"values": [{"id": 4, "name": "DATKAN board", "type": "kanban"}]}
+    )
+    client.current_board()
+    _, kwargs = mock_session.request.call_args
+    assert kwargs["params"]["projectKeyOrId"] == "DATKAN"
+
+
+def test_current_board_unscoped_when_no_project_resolves(client, mock_session):
+    mock_session.request.return_value = make_response(
+        json_data={"values": [{"id": 1, "name": "Some board", "type": "scrum"}]}
+    )
+    client.current_board()
+    _, kwargs = mock_session.request.call_args
+    assert "projectKeyOrId" not in kwargs["params"]
+
+
+def test_current_board_returns_none_when_project_has_no_board(client, mock_session):
+    mock_session.request.return_value = make_response(json_data={"values": []})
+    board = client.current_board(project="DATKAN")
+    assert board is None
+
+
+def test_current_sprint_requires_explicit_board_id(client, mock_session):
+    mock_session.request.return_value = make_response(json_data={"values": []})
+    result = client.current_sprint(4)
+    assert result is None
+    method, url = mock_session.request.call_args[0][:2]
+    assert url.endswith("/board/4/sprint")
+
+
+def test_kanban_status_uses_given_board_id(client, mock_session):
+    mock_session.request.side_effect = [
+        make_response(json_data={"columnConfig": {"columns": [{"name": "To Do"}, {"name": "Done"}]}}),
+        make_response(json_data={"issues": [{"fields": {"status": {"name": "To Do"}}}]}),
+    ]
+    result = client.kanban_status(4)
+    assert result["board_id"] == 4
+    assert result["columns"] == ["To Do", "Done"]
+    assert result["issue_counts_by_column"]["To Do"] == 1

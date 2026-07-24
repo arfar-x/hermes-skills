@@ -71,6 +71,7 @@ skills/jira/
 │   ├── search.py
 │   ├── search_users.py
 │   ├── sprint.py
+│   ├── kanban_status.py
 │   ├── worklog_report.py
 │   ├── list_fields.py
 │   ├── triage.py
@@ -118,7 +119,7 @@ Jira Server/Data Center.
 
 | Tool | Read/Write | Description |
 |---|---|---|
-| `my_work()` | Read | Unresolved issues assigned to the current user |
+| `my_work(project, all_projects, order_by, max_results)` | Read | Unresolved issues assigned to the current user; scoped to `project`/`JIRA_DEFAULT_PROJECT` by default, `all_projects` forces instance-wide |
 | `issue_summary(issue_key, sections)` | Read | Issue + comments + worklogs + changelog + links, as one document (or a subset via `sections`) |
 | `blockers(issue_key)` | Read | `{"blocked": bool, "reasons": [...]}` from links/status/comments |
 | `search(jql, fields, only)` | Read | Arbitrary JQL, structured issue results, projected to exactly the named fields in `only` (default: everything except `description`/time-tracking) |
@@ -127,7 +128,8 @@ Jira Server/Data Center.
 | `worklog(issue_key, duration, description, date, confirm)` | Write (gated) | Log time against an issue, optionally backdated |
 | `worklog_edit(issue_key, worklog_id, duration, description, date, confirm)` | Write (gated) | Update an existing worklog's duration/description/date |
 | `worklog_delete(issue_key, worklog_id, confirm)` | Write (gated) | Permanently delete a worklog entry |
-| `sprint(board_id)` | Read | Active sprint, board, dates, and goal |
+| `sprint(board_id, project)` | Read | Active sprint, board, dates, and goal; board resolved scoped to `project`/`JIRA_DEFAULT_PROJECT` by default -- reports a `note` instead of a sprint if the resolved board is kanban |
+| `kanban_status(board_id, project)` | Read | A kanban board's columns and per-column issue counts, resolved the same way as `sprint` |
 | `worklog_report(since, until, max_issues)` | Read | Aggregate your logged time over a date range vs. each issue's estimate |
 | `list_fields()` | Read | Enumerate every field (incl. custom fields) to discover a custom field's id by name |
 | `triage(project, parent_issue_types, max_results)` | Read | Group unresolved parent issues (Story/Bug/Task) with their labeled subtasks, for frontend/backend/design-readiness triage |

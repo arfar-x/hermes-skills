@@ -7,6 +7,7 @@ from tools import (
     create_issue,
     edit_issue,
     issue_summary,
+    kanban_status,
     list_fields,
     my_work,
     project_context,
@@ -55,18 +56,56 @@ def _fake_config(auto_confirm=False):
     )
 
 
-def test_my_work_returns_list_with_blocked_flag():
+def test_my_work_returns_issues_with_blocked_flag_scoped_to_default_project():
     mock_client = MagicMock()
+    mock_client.resolve_project.return_value = "PAY"
     mock_client.search.return_value = [_issue(status="Blocked")]
     with patch("tools.my_work.get_client", return_value=mock_client):
         result = my_work.my_work()
-    assert result[0]["key"] == "PAY-1"
-    assert result[0]["blocked"] is True
-    mock_client.search.assert_called_once()
+    assert result["project"] == "PAY"
+    assert result["count"] == 1
+    assert result["issues"][0]["key"] == "PAY-1"
+    assert result["issues"][0]["blocked"] is True
+    jql = mock_client.search.call_args[0][0]
+    assert jql.startswith("project = PAY AND")
+
+
+def test_my_work_unscoped_when_no_project_resolves():
+    mock_client = MagicMock()
+    mock_client.resolve_project.return_value = None
+    mock_client.search.return_value = []
+    with patch("tools.my_work.get_client", return_value=mock_client):
+        result = my_work.my_work()
+    assert result["project"] is None
+    jql = mock_client.search.call_args[0][0]
+    assert "project =" not in jql
+
+
+def test_my_work_all_projects_skips_project_resolution():
+    mock_client = MagicMock()
+    mock_client.resolve_project.return_value = "PAY"
+    mock_client.search.return_value = []
+    with patch("tools.my_work.get_client", return_value=mock_client):
+        result = my_work.my_work(all_projects=True)
+    assert result["project"] is None
+    mock_client.resolve_project.assert_not_called()
+    jql = mock_client.search.call_args[0][0]
+    assert "project =" not in jql
+
+
+def test_my_work_explicit_project_overrides_default():
+    mock_client = MagicMock()
+    mock_client.resolve_project.return_value = "PAY"
+    mock_client.search.return_value = []
+    with patch("tools.my_work.get_client", return_value=mock_client):
+        result = my_work.my_work(project="OTHER")
+    mock_client.resolve_project.assert_called_once_with("OTHER")
+    assert result["project"] == "PAY"
 
 
 def test_my_work_requests_only_the_fields_it_uses():
     mock_client = MagicMock()
+    mock_client.resolve_project.return_value = None
     mock_client.search.return_value = []
     with patch("tools.my_work.get_client", return_value=mock_client):
         my_work.my_work()
@@ -76,6 +115,7 @@ def test_my_work_requests_only_the_fields_it_uses():
 
 def test_my_work_wraps_errors_as_json():
     mock_client = MagicMock()
+    mock_client.resolve_project.return_value = None
     from lib.jira_client import JiraApiError
 
     mock_client.search.side_effect = JiraApiError("boom", status_code=500)
@@ -586,3 +626,84 @@ def test_sprint_returns_board_and_active_sprint():
         result = sprint.sprint()
     assert result["board"]["name"] == "PAY Board"
     assert result["sprint"]["goal"] == "Ship it"
+    mock_client.current_board.assert_called_once_with(project=None)
+    mock_client.current_sprint.assert_called_once_with(3)
+
+
+def test_sprint_scopes_board_lookup_to_project():
+    mock_client = MagicMock()
+    from lib.models import Board
+
+    mock_client.current_board.return_value = Board(3, "PAY Board", "scrum")
+    mock_client.current_sprint.return_value = None
+    with patch("tools.sprint.get_client", return_value=mock_client):
+        sprint.sprint(project="PAY")
+    mock_client.current_board.assert_called_once_with(project="PAY")
+
+
+def test_sprint_reports_kanban_note_instead_of_querying_sprints():
+    mock_client = MagicMock()
+    from lib.models import Board
+
+    mock_client.current_board.return_value = Board(4, "DATKAN board", "kanban")
+    with patch("tools.sprint.get_client", return_value=mock_client):
+        result = sprint.sprint(project="DATKAN")
+    assert result["sprint"] is None
+    assert "kanban" in result["note"].lower()
+    mock_client.current_sprint.assert_not_called()
+
+
+def test_sprint_reports_note_when_no_board_found_for_project():
+    mock_client = MagicMock()
+    mock_client.current_board.return_value = None
+    mock_client.resolve_project.return_value = "DATKAN"
+    with patch("tools.sprint.get_client", return_value=mock_client):
+        result = sprint.sprint(project="DATKAN")
+    assert result["board"] is None
+    assert result["sprint"] is None
+    assert "DATKAN" in result["note"]
+
+
+def test_sprint_explicit_board_id_skips_project_resolution():
+    mock_client = MagicMock()
+    mock_client.current_sprint.return_value = None
+    with patch("tools.sprint.get_client", return_value=mock_client):
+        result = sprint.sprint(board_id=99)
+    assert result["board"] == {"id": 99}
+    mock_client.current_board.assert_not_called()
+    mock_client.current_sprint.assert_called_once_with(99)
+
+
+def test_kanban_status_resolves_board_from_project():
+    mock_client = MagicMock()
+    from lib.models import Board
+
+    mock_client.current_board.return_value = Board(4, "DATKAN board", "kanban")
+    mock_client.kanban_status.return_value = {
+        "board_id": 4,
+        "columns": ["To Do", "Done"],
+        "issue_counts_by_column": {"To Do": 2, "Done": 5},
+    }
+    with patch("tools.kanban_status.get_client", return_value=mock_client):
+        result = kanban_status.kanban_status(project="DATKAN")
+    assert result["board_id"] == 4
+    mock_client.current_board.assert_called_once_with(project="DATKAN")
+    mock_client.kanban_status.assert_called_once_with(4)
+
+
+def test_kanban_status_explicit_board_id_skips_resolution():
+    mock_client = MagicMock()
+    mock_client.kanban_status.return_value = {"board_id": 7, "columns": [], "issue_counts_by_column": {}}
+    with patch("tools.kanban_status.get_client", return_value=mock_client):
+        result = kanban_status.kanban_status(board_id=7)
+    assert result["board_id"] == 7
+    mock_client.current_board.assert_not_called()
+
+
+def test_kanban_status_errors_when_no_board_found():
+    mock_client = MagicMock()
+    mock_client.current_board.return_value = None
+    mock_client.resolve_project.return_value = None
+    with patch("tools.kanban_status.get_client", return_value=mock_client):
+        result = kanban_status.kanban_status()
+    assert result["error"]["type"] == "JiraNotFoundError"

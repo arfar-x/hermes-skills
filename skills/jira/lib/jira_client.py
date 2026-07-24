@@ -828,12 +828,16 @@ class JiraClient:
                 return t
         return None
 
-    def current_sprint(self, board_id: Optional[int] = None) -> Optional[Sprint]:
-        """Return the active sprint for a board (auto-detected if not given)."""
-        resolved_board_id = board_id if board_id is not None else self._require_default_board_id()
+    def current_sprint(self, board_id: int) -> Optional[Sprint]:
+        """Return the active sprint for a given board.
+
+        ``board_id`` is required -- resolve it via ``current_board()``
+        first (scoped to a project when one applies) rather than guessing
+        an unrelated board in a multi-project instance.
+        """
         payload = self._request(
             "GET",
-            f"{self.AGILE_V1}/board/{resolved_board_id}/sprint",
+            f"{self.AGILE_V1}/board/{board_id}/sprint",
             params={"state": "active"},
         )
         values = payload.get("values", [])
@@ -847,25 +851,36 @@ class JiraClient:
             start_date=raw.get("startDate"),
             end_date=raw.get("endDate"),
             goal=raw.get("goal"),
-            board_id=raw.get("originBoardId", resolved_board_id),
+            board_id=raw.get("originBoardId", board_id),
         )
 
-    def current_board(self) -> Optional[Board]:
-        """Return the first board visible to the authenticated user.
+    def current_board(self, project: Optional[str] = None) -> Optional[Board]:
+        """Return a board for the given project, or the first board visible
+        to the authenticated user if no project resolves.
 
-        In multi-board Jira instances, prefer calling agile endpoints with
-        an explicit ``board_id`` obtained via a project-scoped lookup.
+        ``project`` falls back to ``JIRA_DEFAULT_PROJECT`` via
+        ``resolve_project()``. Scoping by project matters in multi-project
+        instances: an unscoped lookup can return an unrelated project's
+        board, which then silently drives ``current_sprint``/
+        ``kanban_status`` against the wrong project.
         """
-        payload = self._request("GET", f"{self.AGILE_V1}/board", params={"maxResults": 1})
+        resolved_project = self.resolve_project(project)
+        params: Dict[str, Any] = {"maxResults": 1}
+        if resolved_project:
+            params["projectKeyOrId"] = resolved_project
+        payload = self._request("GET", f"{self.AGILE_V1}/board", params=params)
         values = payload.get("values", [])
         if not values:
             return None
         raw = values[0]
         return Board(id=raw.get("id"), name=raw.get("name", ""), type=raw.get("type", ""))
 
-    def kanban_status(self, board_id: Optional[int] = None) -> Dict[str, Any]:
-        """Return the kanban board's column configuration and per-column issue counts."""
-        resolved_board_id = board_id if board_id is not None else self._require_default_board_id()
+    def kanban_status(self, board_id: int) -> Dict[str, Any]:
+        """Return the kanban board's column configuration and per-column
+        issue counts. ``board_id`` is required -- resolve it via
+        ``current_board()`` first, same reasoning as ``current_sprint``.
+        """
+        resolved_board_id = board_id
         config = self._request("GET", f"{self.AGILE_V1}/board/{resolved_board_id}/configuration", params={})
         columns = config.get("columnConfig", {}).get("columns", [])
 
@@ -1274,17 +1289,6 @@ class JiraClient:
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
-
-    _default_board_id: Optional[int] = None
-
-    def _require_default_board_id(self) -> int:
-        if self._default_board_id is not None:
-            return self._default_board_id
-        board = self.current_board()
-        if board is None:
-            raise JiraNotFoundError("No boards are visible to the authenticated user.")
-        self._default_board_id = board.id
-        return board.id
 
     @staticmethod
     def _require_issue_key(issue_key: str) -> None:

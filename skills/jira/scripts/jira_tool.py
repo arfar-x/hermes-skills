@@ -8,14 +8,15 @@ and always prints exactly one JSON document to stdout, so the agent can
 parse the result the same way regardless of success or failure.
 
 Usage:
-    python scripts/jira_tool.py my_work
+    python scripts/jira_tool.py my_work [--project PAYKAN] [--all_projects]
     python scripts/jira_tool.py issue_summary --issue_key PAY-123 [--sections issue,worklogs]
     python scripts/jira_tool.py blockers --issue_key PAY-123
     python scripts/jira_tool.py search --jql "assignee = currentUser()" [--only summary,status,priority]
     python scripts/jira_tool.py worklog --issue_key PAY-123 --duration 2h \\
         --description "implementing validation" [--date 2026-07-20] [--confirm]
     python scripts/jira_tool.py transition --issue_key PAY-123 --status Review [--confirm]
-    python scripts/jira_tool.py sprint [--board_id 3]
+    python scripts/jira_tool.py sprint [--board_id 3] [--project PAYKAN]
+    python scripts/jira_tool.py kanban_status [--board_id 3] [--project PAYKAN]
     python scripts/jira_tool.py worklog_report [--since -14d] [--until ...] [--max_issues 50]
     python scripts/jira_tool.py list_fields
     python scripts/jira_tool.py worklog_edit --issue_key PAY-123 --worklog_id 28459 \\
@@ -53,6 +54,7 @@ from tools import (  # noqa: E402
     create_issue,
     edit_issue,
     issue_summary,
+    kanban_status,
     list_fields,
     my_work,
     project_context,
@@ -78,6 +80,16 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="tool", required=True)
 
     p = subparsers.add_parser("my_work", help="List unresolved issues assigned to the current user")
+    p.add_argument(
+        "--project",
+        default=None,
+        help="Scope to this project key. Falls back to JIRA_DEFAULT_PROJECT if omitted.",
+    )
+    p.add_argument(
+        "--all_projects",
+        action="store_true",
+        help="Force an instance-wide search, ignoring --project and JIRA_DEFAULT_PROJECT.",
+    )
     p.add_argument("--order_by", default="priority DESC, updated DESC")
     p.add_argument("--max_results", type=int, default=100)
 
@@ -132,6 +144,21 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = subparsers.add_parser("sprint", help="Active sprint, board, dates, and goal")
     p.add_argument("--board_id", type=int, default=None)
+    p.add_argument(
+        "--project",
+        default=None,
+        help="Resolve a board for this project (ignored if --board_id given). "
+        "Falls back to JIRA_DEFAULT_PROJECT if omitted.",
+    )
+
+    p = subparsers.add_parser("kanban_status", help="Column breakdown for a kanban board")
+    p.add_argument("--board_id", type=int, default=None)
+    p.add_argument(
+        "--project",
+        default=None,
+        help="Resolve a board for this project (ignored if --board_id given). "
+        "Falls back to JIRA_DEFAULT_PROJECT if omitted.",
+    )
 
     p = subparsers.add_parser(
         "worklog_report", help="Aggregate the current user's logged time over a date range"
@@ -239,7 +266,12 @@ def build_parser() -> argparse.ArgumentParser:
 
 def dispatch(args: argparse.Namespace):
     if args.tool == "my_work":
-        return my_work.my_work(order_by=args.order_by, max_results=args.max_results)
+        return my_work.my_work(
+            project=args.project,
+            all_projects=args.all_projects,
+            order_by=args.order_by,
+            max_results=args.max_results,
+        )
     if args.tool == "issue_summary":
         sections = args.sections.split(",") if args.sections else None
         return issue_summary.issue_summary(args.issue_key, sections=sections)
@@ -256,7 +288,9 @@ def dispatch(args: argparse.Namespace):
             args.issue_key, args.duration, args.description, date=args.date, confirm=args.confirm
         )
     if args.tool == "sprint":
-        return sprint.sprint(board_id=args.board_id)
+        return sprint.sprint(board_id=args.board_id, project=args.project)
+    if args.tool == "kanban_status":
+        return kanban_status.kanban_status(board_id=args.board_id, project=args.project)
     if args.tool == "worklog_report":
         return worklog_report.worklog_report(since=args.since, until=args.until, max_issues=args.max_issues)
     if args.tool == "list_fields":

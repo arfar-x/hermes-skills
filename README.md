@@ -25,6 +25,7 @@ skills/
 ├── jira-issue-summary/    # Thin skill: full context for one issue
 ├── jira-blockers/         # Thin skill: blocking status for one issue
 ├── jira-sprint/           # Thin skill: active sprint/board/goal
+├── jira-kanban-status/    # Thin skill: kanban board columns/issue counts
 ├── jira-worklog/          # Thin skill: log time (write, confirm-gated)
 ├── jira-status/           # Thin skill: move an issue's status (write, confirm-gated)
 ├── jira-worklog-report/   # Thin skill: logged time vs. estimate over a date range
@@ -63,11 +64,12 @@ single place to see everything installable at a glance.
 | Skill | Toolset | Type | Description |
 |---|---|---|---|
 | `jira` | [jira](skills/jira) | Read + Write | Do-everything Jira assistant (all actions below, one skill) |
-| `jira-my-work` | [jira](skills/jira) | Read | Unresolved issues assigned to the current user |
+| `jira-my-work` | [jira](skills/jira) | Read | Unresolved issues assigned to the current user (scoped to a project by default) |
 | `jira-issues` | [jira](skills/jira) | Read | Arbitrary JQL search (incl. components/subtasks/custom fields; description on request) |
 | `jira-issue-summary` | [jira](skills/jira) | Read | Full context for one issue (fields, comments, worklogs, changelog, links) |
 | `jira-blockers` | [jira](skills/jira) | Read | Blocking status + reasons for one issue |
-| `jira-sprint` | [jira](skills/jira) | Read | Active sprint, board, dates, goal |
+| `jira-sprint` | [jira](skills/jira) | Read | Active sprint, board, dates, goal (scoped to a project by default) |
+| `jira-kanban-status` | [jira](skills/jira) | Read | Kanban board columns and per-column issue counts |
 | `jira-worklog` | [jira](skills/jira) | Write (gated) | Log time against an issue, optionally backdated |
 | `jira-status` | [jira](skills/jira) | Write (gated) | Move an issue to a new status |
 | `jira-worklog-report` | [jira](skills/jira) | Read | Logged time vs. estimate over a date range, per issue and total |

@@ -226,16 +226,34 @@ python3 scripts/jira_tool.py <tool> [--flags...]
     These are shapes to adapt, not rigid schemas -- use judgment on which
     fields matter for the question asked, but keep the one-summary-line-
     then-detail structure and the single-icon-per-role rule above.
+14. **Stay scoped to the current project; ask before broadening.**
+    `my_work`, `sprint`, and `kanban_status` all default to
+    `JIRA_DEFAULT_PROJECT` (or an explicit `--project`) rather than
+    searching instance-wide -- don't pass `--all_projects` (`my_work`) or
+    an unscoped `search`/`search_users` call just because a scoped result
+    looks short or empty. If a scoped result is genuinely empty or
+    doesn't answer the question, tell the user what you searched (state
+    the project and query) and ask whether to broaden, rather than
+    silently retrying wider or mixing in other projects' issues. This
+    also means: don't assume every project is a Scrum board with sprints
+    -- a project can be Kanban-only (`sprint` returns `"note"` saying so
+    when it detects this; use `kanban_status` for that board's real
+    state instead), so a missing/ended sprint on the default project
+    isn't evidence there's no work to report, it's evidence to check
+    `kanban_status` or a plain `my_work`/`search` instead.
 
 ## Commands
 
 ```bash
-# Unresolved issues assigned to the current user. --order_by is a JQL
-# ORDER BY clause (default: "priority DESC, updated DESC"); --max_results
-# caps how many come back. Use these instead of fetching everything and
-# post-processing yourself -- e.g. "what's the last task I worked on" is
-# --order_by "updated DESC" --max_results 1, not a second script.
-python3 scripts/jira_tool.py my_work [--order_by "updated DESC"] [--max_results 1]
+# Unresolved issues assigned to the current user. Scoped to --project (or
+# JIRA_DEFAULT_PROJECT) by default (rule 14) -- pass --all_projects only if
+# the user asked to broaden. --order_by is a JQL ORDER BY clause (default:
+# "priority DESC, updated DESC"); --max_results caps how many come back.
+# Use these instead of fetching everything and post-processing yourself --
+# e.g. "what's the last task I worked on" is --order_by "updated DESC"
+# --max_results 1, not a second script.
+python3 scripts/jira_tool.py my_work [--project PAY] [--all_projects] \
+  [--order_by "updated DESC"] [--max_results 1]
 
 # Full context for one issue: fields, comments, worklogs, changelog, links.
 # --sections limits which parts to fetch/return (default: all)
@@ -268,8 +286,16 @@ python3 scripts/jira_tool.py project_context [--project PAY]
 # an unscoped instance-wide search
 python3 scripts/jira_tool.py search_users --query john [--project PAY] [--all_projects]
 
-# Active sprint / board / dates / goal
-python3 scripts/jira_tool.py sprint
+# Active sprint / board / dates / goal. Board is resolved scoped to
+# --project (or JIRA_DEFAULT_PROJECT) by default (rule 14). If the
+# resolved board is kanban (no sprints), "sprint" comes back null with a
+# "note" pointing at kanban_status instead.
+python3 scripts/jira_tool.py sprint [--project PAY] [--board_id 42]
+
+# Kanban board's columns and per-column issue counts -- the kanban
+# equivalent of "sprint" for boards with no active sprint. Board scoped
+# the same way as sprint (rule 14).
+python3 scripts/jira_tool.py kanban_status [--project PAY] [--board_id 42]
 
 # Your logged time over a date range, vs. each issue's original estimate
 python3 scripts/jira_tool.py worklog_report --since -14d [--until 2026-07-20] [--max_issues 50]
@@ -312,16 +338,35 @@ python3 scripts/jira_tool.py edit_issue --issue_key PAY-123 \
 ## Examples
 
 **"What should I work on next?"**
-Run `my_work`. Reason over the returned list (priority, status, `blocked`,
+Run `my_work` (scoped to `JIRA_DEFAULT_PROJECT`/`--project` by default,
+rule 14). Reason over the returned `issues` (priority, status, `blocked`,
 staleness) and recommend the best candidate using the recommendation
 template (rule 13) -- lead with the pick and why, don't just dump the JSON
-or bury the answer at the end of a ranked list.
+or bury the answer at the end of a ranked list. If `issues` is empty,
+don't assume there's nothing to do -- check `sprint` for that project: if
+its `"note"` says the board is kanban, or the sprint has ended, that's
+not "no work", it's a reason to check `kanban_status` (or a plain
+`my_work`/`search`) instead of telling the user they're done.
 
 **"What's the last task I worked on?"**
 Run `my_work --order_by "updated DESC" --max_results 1` -- it comes back
 sorted with exactly the one issue you need, no further sorting or
 scripting required (rule 9). Report it using the single-issue template
 (rule 13).
+
+**"What should I work on tomorrow?" (default project is kanban)**
+Run `my_work` (rule 14 keeps it scoped to `JIRA_DEFAULT_PROJECT`). Don't
+also reach for `sprint` first just because "tomorrow" sounds like a
+planning question -- kanban projects have no sprints, so a "sprint
+ended"/`null` result from `sprint` is expected there, not a sign
+something's wrong or that `my_work` will come up empty too. If `my_work`
+does come back empty, check `kanban_status` for that project's real board
+state before concluding there's nothing to do.
+
+**"What's blocking my board right now?" / "How many tickets are in review?"**
+Run `kanban_status [--project PAY]`. Report `issue_counts_by_column`
+against the board's real `columns` -- never assume a generic To Do/In
+Progress/Done set; use the names the board actually returned.
 
 **"Show me the backend tasks, grouped by status."**
 Run `search --jql 'project = PAY AND labels = "backend"' --only
