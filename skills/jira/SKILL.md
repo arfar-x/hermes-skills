@@ -171,6 +171,61 @@ python3 scripts/jira_tool.py <tool> [--flags...]
     fetched or remembered) to catch a likely typo or mismatched term in
     what the user said (e.g. "pended" doesn't match any real status --
     ask what they meant) instead of guessing blind.
+13. **Format every response for fast skimming, using the templates
+    below.** This applies in every runtime you might be running in, not
+    just one particular chat surface -- it's plain markdown plus emoji,
+    which renders the same everywhere. Lead with the answer, not a
+    preamble; put a one-line summary first (counts, the headline fact),
+    then supporting detail below it, so the gist is visible without
+    reading the whole message. One issue per line. Every group/section
+    gets exactly one leading emoji as a visual anchor for the message
+    *kind* (pick one consistently per kind of question, e.g. 📋 for a
+    list, 🎫 for one issue, 👉 for a recommendation) -- don't invent a new
+    emoji vocabulary per response or reuse one emoji for different
+    meanings across responses. The only *data-driven* icon is priority
+    (🔴 High/Highest, 🟡 Medium, 🟢 Low/Lowest) -- never invent a
+    status-to-emoji mapping, since status names and their meaning differ
+    per project's workflow (rule 11); a status name is just bolded plain
+    text as a group header.
+
+    Grouped/bulk list (`search`, `triage`, `my_work` with several results):
+    ```
+    📋 <project> — <what this is> (<total count>)
+    <n> active · <n> in review · <n> backlog unassigned  <- whatever counts matter here
+
+    <Status name> (<count>)
+    🔴 [KEY](url) <summary> — <assignee>
+    🟡 [KEY](url) <summary> — <assignee>
+
+    <Next status name> (<count>)
+    ...
+    ```
+
+    Single issue (`issue_summary`, `blockers`, `get_issue`):
+    ```
+    🎫 [KEY](url) — <summary>
+    🔴 <priority> · <status> · <assignee>
+
+    🔗 Blocked by [KEY](url) (<its status>)   <- only if actually blocked, rule 3
+    ⏱ <logged> / <estimate> logged
+    💬 "<latest comment text>" — <relative time>
+    ```
+    Omit any line above that doesn't apply (no blockers, no worklogs, no
+    comments) rather than printing an empty or "none" line for each.
+
+    Recommendation (`my_work` reasoned into "what should I work on
+    next"):
+    ```
+    👉 Do next: [KEY](url)
+    <summary>
+    <the 1-2 reasons -- priority, unblocked, staleness>
+    ```
+    A ranked runner-up list may follow underneath if useful, using the
+    grouped-list line format above.
+
+    These are shapes to adapt, not rigid schemas -- use judgment on which
+    fields matter for the question asked, but keep the one-summary-line-
+    then-detail structure and the single-icon-per-role rule above.
 
 ## Commands
 
@@ -258,33 +313,37 @@ python3 scripts/jira_tool.py edit_issue --issue_key PAY-123 \
 
 **"What should I work on next?"**
 Run `my_work`. Reason over the returned list (priority, status, `blocked`,
-staleness) and recommend the best candidate in prose -- don't just dump
-the JSON.
+staleness) and recommend the best candidate using the recommendation
+template (rule 13) -- lead with the pick and why, don't just dump the JSON
+or bury the answer at the end of a ranked list.
 
 **"What's the last task I worked on?"**
 Run `my_work --order_by "updated DESC" --max_results 1` -- it comes back
 sorted with exactly the one issue you need, no further sorting or
-scripting required (rule 9). Report that issue's key/summary/status.
+scripting required (rule 9). Report it using the single-issue template
+(rule 13).
 
 **"Show me the backend tasks, grouped by status."**
 Run `search --jql 'project = PAY AND labels = "backend"' --only
 status,assignee,priority,summary`. The grouping itself is just reading the
-returned list and organizing it by each issue's `status` field in your
-reply (a paragraph or a few bullets per status, each key linked via its
-`url` per rule 8 -- e.g. `[PAY-96](...)`, not a bare `PAY-96`) -- reason
-over the JSON directly, per rule 9. Never write a Python/jq script
-(piped, heredoc, or `-c`) to sort/group/tabulate a result you already
-have in hand; besides being unnecessary, that class of command is
-exactly what a security scanner (Hermes' included) flags and blocks for
-approval.
+returned list and organizing it by each issue's `status` field into the
+grouped-list template (rule 13) -- one summary line up top, one status
+group per section, every key linked (rule 8) -- reason over the JSON
+directly, per rule 9. Never write a Python/jq script (piped, heredoc, or
+`-c`) to sort/group/tabulate a result you already have in hand; besides
+being unnecessary, that class of command is exactly what a security
+scanner (Hermes' included) flags and blocks for approval.
 
 **"What's blocking PAY-412?"**
 Run `blockers --issue_key PAY-412`. If `blocked: true`, summarize
-`reasons` in a sentence. If `false`, say nothing is blocking it.
+`reasons` using the single-issue template's 🔗 line (rule 13). If
+`false`, say nothing is blocking it.
 
 **"Summarize PAY-412."**
-Run `issue_summary --issue_key PAY-412`. Produce a concise natural-
-language summary of status, recent activity, and any linked work.
+Run `issue_summary --issue_key PAY-412`. Produce a concise summary using
+the single-issue template (rule 13): status/priority/assignee up top,
+then only the sections that actually apply (blockers, worklogs, latest
+comment) -- not a full dump of every field.
 
 **"Log 2h on PAY-412 for implementing validation."**
 First confirm with the user ("I'll log 2h on PAY-412: 'implementing
