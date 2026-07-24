@@ -57,6 +57,19 @@ this JSON.
   fields, e.g. a "Figma Link" field, always surfaced in `custom_fields`.
   Discover its ID first via the `jira-list-fields` skill; never guess a
   `customfield_NNNNN` id.
+- **`--only`'s field names and `--jql`'s field names are different
+  vocabularies -- don't mix them up.** `--only` uses this skill's own
+  snake_case names (`due_date`, `issue_type`); `--jql` uses Jira's own
+  JQL field names, which differ: `due` (not `due_date`), `issuetype`
+  (not `issue_type`), `reporter` for "who filed this" (not `creator` --
+  don't invent an alternate field name just because a query returns
+  nothing). Never write a status literal into `--jql` (e.g.
+  `status = 'Pending'`) unless you've actually seen that exact status
+  name in a prior result -- a plausible guess doesn't error, it just
+  silently returns zero misleading results. If a query built with the
+  right, known field names still returns nothing, say exactly what you
+  searched and ask, rather than silently swapping in a different field
+  name and retrying.
 - For subtask/description/component questions ("which tasks have no
   subtasks", "does this need frontend or backend work"), request the
   relevant fields via `--only` and reason over them yourself -- there is

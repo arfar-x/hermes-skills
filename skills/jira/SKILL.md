@@ -124,6 +124,25 @@ python3 scripts/jira_tool.py <tool> [--flags...]
     `custom_fields` are always present regardless of `--only`, and
     `blocked` is always computed for `search` even if `status`/`links`
     weren't explicitly requested.
+11. **Never guess a JQL field name or literal value -- there are two
+    different vocabularies, don't mix them up.** `--only`/`--sections`
+    use this skill's own output names (`due_date`, `issue_type`);
+    `--jql` uses Jira's own JQL field names, which are different:
+    `due` (not `due_date`), `issuetype` (not `issue_type`), `reporter`
+    for "who filed this" (not `creator` -- don't invent an alternate
+    field name if a query using the documented one returns nothing).
+    Use exactly the field names shown in this file's Examples --
+    `reporter`, `assignee`, `status`, `due`, `priority`, `labels`,
+    `resolution`, `updated`, `created`. Never write a status literal
+    (e.g. `status = 'Pending'`) into JQL unless you've actually seen
+    that exact status appear in a prior `my_work`/`search` result or the
+    user gave it to you -- a plausible-sounding guess doesn't error, it
+    just silently returns zero misleading results. If a query built this
+    way still returns nothing, don't silently swap in a different field
+    name and retry blind -- tell the user exactly what you searched
+    (state the JQL) and ask, or verify first (`list_fields` for custom
+    fields, one broader `search`/`my_work` call to see real status
+    names) rather than guessing your way through several variants.
 
 ## Commands
 
@@ -140,7 +159,9 @@ python3 scripts/jira_tool.py blockers --issue_key PAY-123
 
 # Arbitrary JQL search. --only asks for exactly the named fields you need
 # instead of everything (default: everything except description and
-# time-tracking fields); "blocked" is always computed and returned
+# time-tracking fields); "blocked" is always computed and returned.
+# --only's names and --jql's field names are DIFFERENT vocabularies --
+# see rule 11 (e.g. --jql uses "due", --only uses "due_date")
 python3 scripts/jira_tool.py search --jql "assignee = currentUser() AND updated <= -14d" \
   [--fields customfield_10056] [--only summary,status,priority]
 
@@ -305,7 +326,9 @@ and only then retry with `--all_projects` (omitting `--project` isn't
 enough to bypass `JIRA_DEFAULT_PROJECT`). If still ambiguous after a
 scoped attempt, ask the user to disambiguate. Once resolved, resolve
 "tomorrow" to an actual calendar date yourself, then run
-`search --jql "assignee = <account_id> AND reporter = currentUser() AND due = <date>"`.
+`search --jql "assignee = <account_id> AND reporter = currentUser() AND due = <date>"`
+-- note `reporter` and `due`, per rule 11: don't drift to `creator` or
+`due_date` if this returns nothing, that's guessing, not verifying.
 
 **"Create a bug for the checkout crash."**
 Confirm the project, summary, and issue type with the user, then run
